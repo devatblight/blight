@@ -1,0 +1,528 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"sync/atomic"
+	"syscall"
+	"unsafe"
+
+	"blight/internal/apps"
+	"blight/internal/commands"
+	"blight/internal/debug"
+	"blight/internal/files"
+	"blight/internal/hotkey"
+	"blight/internal/search"
+	"blight/internal/tray"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
+)
+
+type SearchResult struct {
+	ID       string `json:"id"`
+	Title    string `json:"title"`
+	Subtitle string `json:"subtitle"`
+	Icon     string `json:"icon"`
+	Category string `json:"category"`
+	Path     string `json:"path"`
+}
+
+type ContextAction struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+	Icon  string `json:"icon"`
+}
+
+type BlightConfig struct {
+	FirstRun bool   `json:"firstRun"`
+	Hotkey   string `json:"hotkey"`
+}
+
+type App struct {
+	ctx       context.Context
+	config    BlightConfig
+	scanner   *apps.Scanner
+	usage     *search.UsageTracker
+	clipboard *commands.ClipboardHistory
+	fileIdx   *files.FileIndex
+	hotkey    *hotkey.HotkeyManager
+	tray      *tray.TrayIcon
+	visible   atomic.Bool
+}
+
+func NewApp() *App {
+	return &App{}
+}
+
+func (a *App) startup(ctx context.Context) {
+	log := debug.Get()
+	defer log.RecoverPanic("app.startup")
+
+	log.Info("app.startup called")
+	a.ctx = ctx
+	a.visible.Store(true)
+	a.loadConfig()
+	log.Debug("config loaded", map[string]interface{}{"firstRun": a.config.FirstRun, "hotkey": a.config.Hotkey})
+
+	a.scanner = apps.NewScanner()
+	log.Info("app scanner initialized", map[string]interface{}{"appCount": len(a.scanner.Apps())})
+
+	a.usage = search.NewUsageTracker()
+	a.clipboard = commands.NewClipboardHistory(ctx)
+	go a.clipboard.PollClipboard()
+	log.Debug("clipboard polling started")
+
+	a.fileIdx = files.NewFileIndex(func(status files.IndexStatus) {
+		log.Debug("index status changed", map[string]interface{}{"state": status.State, "message": status.Message, "count": status.Count})
+		runtime.EventsEmit(ctx, "indexStatus", status)
+	})
+	a.fileIdx.Start()
+	log.Info("file indexer started")
+
+	a.hotkey = hotkey.New(func() {
+		log.Debug("hotkey triggered (Alt+Space)")
+		a.ToggleWindow()
+	})
+	a.hotkey.Start()
+	log.Info("global hotkey registered (Alt+Space)")
+
+	a.tray = tray.New(
+		func() { a.ShowWindow() },
+		func() { log.Info("settings requested from tray") },
+		func() { runtime.Quit(ctx) },
+	)
+	a.tray.Start()
+	log.Info("system tray icon created")
+
+	log.Info("startup complete")
+}
+
+func (a *App) shutdown(ctx context.Context) {
+	log := debug.Get()
+	log.Info("shutdown called")
+	if a.hotkey != nil {
+		a.hotkey.Stop()
+	}
+	if a.tray != nil {
+		a.tray.Stop()
+	}
+	log.Info("cleanup complete")
+}
+
+func (a *App) ToggleWindow() {
+	if a.visible.Load() {
+		runtime.WindowHide(a.ctx)
+		a.visible.Store(false)
+	} else {
+		runtime.WindowShow(a.ctx)
+		runtime.WindowSetAlwaysOnTop(a.ctx, true)
+		a.visible.Store(true)
+	}
+}
+
+func (a *App) ShowWindow() {
+	runtime.WindowShow(a.ctx)
+	runtime.WindowSetAlwaysOnTop(a.ctx, true)
+	a.visible.Store(true)
+}
+
+func (a *App) configDir() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".blight")
+}
+
+func (a *App) configPath() string {
+	return filepath.Join(a.configDir(), "config.json")
+}
+
+func (a *App) loadConfig() {
+	data, err := os.ReadFile(a.configPath())
+	if err != nil {
+		a.config = BlightConfig{FirstRun: true, Hotkey: "Alt+Space"}
+		return
+	}
+	if err := json.Unmarshal(data, &a.config); err != nil {
+		a.config = BlightConfig{FirstRun: true, Hotkey: "Alt+Space"}
+	}
+}
+
+func (a *App) saveConfig() error {
+	if err := os.MkdirAll(a.configDir(), 0755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(a.config, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(a.configPath(), data, 0644)
+}
+
+func (a *App) IsFirstRun() bool {
+	return a.config.FirstRun
+}
+
+func (a *App) CompleteOnboarding(hotkey string) error {
+	a.config.FirstRun = false
+	if hotkey != "" {
+		a.config.Hotkey = hotkey
+	}
+	return a.saveConfig()
+}
+
+func (a *App) Search(query string) []SearchResult {
+	log := debug.Get()
+	if query == "" {
+		return a.getDefaultResults()
+	}
+
+	var results []SearchResult
+
+	if commands.IsCalcQuery(query) {
+		calc := commands.Evaluate(query)
+		if calc.Valid {
+			results = append(results, SearchResult{
+				ID:       "calc-result",
+				Title:    calc.Result,
+				Subtitle: calc.Expression + " — press Enter to copy",
+				Icon:     "",
+				Category: "Calculator",
+			})
+		}
+	}
+
+	ql := strings.ToLower(query)
+	if strings.HasPrefix(ql, "cb ") || strings.HasPrefix(ql, "clip ") || ql == "clipboard" || ql == "cb" || ql == "clip" {
+		entries := a.clipboard.Entries()
+		limit := 8
+		if len(entries) < limit {
+			limit = len(entries)
+		}
+		for i, entry := range entries[:limit] {
+			preview := entry.Content
+			if len(preview) > 80 {
+				preview = preview[:80] + "…"
+			}
+			results = append(results, SearchResult{
+				ID:       fmt.Sprintf("clip-%d", i),
+				Title:    preview,
+				Subtitle: "Clipboard — press Enter to copy",
+				Icon:     "",
+				Category: "Clipboard",
+			})
+		}
+	}
+
+	results = append(results, a.searchSystemCommands(query)...)
+	results = append(results, a.searchApps(query)...)
+	results = append(results, a.searchFiles(query)...)
+
+	if len(results) == 0 {
+		return []SearchResult{
+			{ID: "no-results", Title: "No results found", Subtitle: query, Icon: "", Category: "General"},
+		}
+	}
+
+	log.Debug("search", map[string]interface{}{"query": query, "results": len(results)})
+	return results
+}
+
+func (a *App) Execute(id string) string {
+	debug.Get().Info("execute", map[string]interface{}{"id": id})
+	if id == "calc-result" {
+		runtime.ClipboardSetText(a.ctx, "")
+		return "copied"
+	}
+
+	if strings.HasPrefix(id, "clip-") {
+		idxStr := strings.TrimPrefix(id, "clip-")
+		var idx int
+		fmt.Sscanf(idxStr, "%d", &idx)
+		if a.clipboard.CopyToClipboard(idx) {
+			return "copied"
+		}
+		return "error"
+	}
+
+	if strings.HasPrefix(id, "sys-") {
+		sysID := strings.TrimPrefix(id, "sys-")
+		if err := commands.ExecuteSystemCommand(sysID); err != nil {
+			return err.Error()
+		}
+		return "ok"
+	}
+
+	if strings.HasPrefix(id, "file-open:") {
+		filePath := strings.TrimPrefix(id, "file-open:")
+		cmd := exec.Command("cmd", "/c", "start", "", filePath)
+		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+		cmd.Start()
+		runtime.WindowHide(a.ctx)
+		return "ok"
+	}
+
+	if strings.HasPrefix(id, "file-reveal:") {
+		filePath := strings.TrimPrefix(id, "file-reveal:")
+		exec.Command("explorer", "/select,", filePath).Start()
+		return "ok"
+	}
+
+	allApps := a.scanner.Apps()
+	for _, app := range allApps {
+		if app.Name == id {
+			a.usage.Record(id)
+			if err := apps.Launch(app); err != nil {
+				return err.Error()
+			}
+			runtime.WindowHide(a.ctx)
+			return "ok"
+		}
+	}
+	return "not found"
+}
+
+func (a *App) GetContextActions(id string) []ContextAction {
+	return []ContextAction{
+		{ID: "open", Label: "Open", Icon: "▶"},
+		{ID: "admin", Label: "Run as Administrator", Icon: "🛡️"},
+		{ID: "explorer", Label: "Show in Explorer", Icon: "📂"},
+		{ID: "copy-path", Label: "Copy Path", Icon: "📋"},
+	}
+}
+
+func (a *App) ExecuteContextAction(resultID string, actionID string) string {
+	allApps := a.scanner.Apps()
+	var target apps.AppEntry
+	found := false
+
+	for _, app := range allApps {
+		if app.Name == resultID {
+			target = app
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return "not found"
+	}
+
+	switch actionID {
+	case "open":
+		a.usage.Record(resultID)
+		if err := apps.Launch(target); err != nil {
+			return err.Error()
+		}
+		runtime.WindowHide(a.ctx)
+		return "ok"
+
+	case "admin":
+		a.usage.Record(resultID)
+		err := runAsAdmin(target.Path)
+		if err != nil {
+			return err.Error()
+		}
+		runtime.WindowHide(a.ctx)
+		return "ok"
+
+	case "explorer":
+		dir := filepath.Dir(target.Path)
+		exec.Command("explorer", "/select,", target.Path).Start()
+		_ = dir
+		return "ok"
+
+	case "copy-path":
+		runtime.ClipboardSetText(a.ctx, target.Path)
+		return "ok"
+	}
+
+	return "unknown action"
+}
+
+func (a *App) GetIcon(path string) string {
+	return apps.GetIconBase64(path)
+}
+
+func (a *App) HideWindow() {
+	runtime.WindowHide(a.ctx)
+	a.visible.Store(false)
+}
+
+func (a *App) RefreshApps() {
+	a.scanner.Scan()
+}
+
+func (a *App) GetIndexStatus() files.IndexStatus {
+	return a.fileIdx.Status()
+}
+
+func (a *App) ReindexFiles() {
+	a.fileIdx.Reindex()
+}
+
+func (a *App) ClearIndex() {
+	a.fileIdx.ClearIndex()
+}
+
+func (a *App) searchFiles(query string) []SearchResult {
+	if len(query) < 3 {
+		return nil
+	}
+
+	status := a.fileIdx.Status()
+	if status.State != "ready" {
+		return nil
+	}
+
+	fileResults := a.fileIdx.SearchFiles(query)
+	if len(fileResults) > 5 {
+		fileResults = fileResults[:5]
+	}
+
+	var results []SearchResult
+	for _, f := range fileResults {
+		results = append(results, SearchResult{
+			ID:       "file-open:" + f.Path,
+			Title:    f.Name,
+			Subtitle: prettifyPath(f.Dir),
+			Icon:     "",
+			Category: "Files",
+			Path:     f.Path,
+		})
+	}
+
+	return results
+}
+
+func (a *App) searchSystemCommands(query string) []SearchResult {
+	ql := strings.ToLower(query)
+	var results []SearchResult
+
+	for _, cmd := range commands.SystemCommands {
+		matched := false
+		if strings.Contains(strings.ToLower(cmd.Name), ql) {
+			matched = true
+		}
+		for _, kw := range cmd.Keywords {
+			if strings.Contains(kw, ql) {
+				matched = true
+				break
+			}
+		}
+		if matched {
+			results = append(results, SearchResult{
+				ID:       "sys-" + cmd.ID,
+				Title:    cmd.Name,
+				Subtitle: cmd.Subtitle,
+				Icon:     "",
+				Category: "System",
+			})
+		}
+	}
+
+	return results
+}
+
+func (a *App) searchApps(query string) []SearchResult {
+	allApps := a.scanner.Apps()
+	names := a.scanner.Names()
+
+	usageScores := make([]int, len(allApps))
+	for i, app := range allApps {
+		usageScores[i] = a.usage.Score(app.Name)
+	}
+
+	matches := search.Fuzzy(query, names, usageScores)
+
+	var results []SearchResult
+	limit := 10
+	if len(matches) < limit {
+		limit = len(matches)
+	}
+
+	for _, m := range matches[:limit] {
+		app := allApps[m.Index]
+		icon := apps.GetIconBase64(app.Path)
+
+		results = append(results, SearchResult{
+			ID:       app.Name,
+			Title:    app.Name,
+			Subtitle: prettifyPath(app.Path),
+			Icon:     icon,
+			Category: "Applications",
+			Path:     app.Path,
+		})
+	}
+
+	return results
+}
+
+func (a *App) getDefaultResults() []SearchResult {
+	allApps := a.scanner.Apps()
+
+	names := a.scanner.Names()
+	usageScores := make([]int, len(allApps))
+	for i, app := range allApps {
+		usageScores[i] = a.usage.Score(app.Name)
+	}
+	matches := search.Fuzzy("", names, usageScores)
+
+	count := 6
+	if len(matches) < count {
+		count = len(matches)
+	}
+
+	var results []SearchResult
+	for _, m := range matches[:count] {
+		app := allApps[m.Index]
+		icon := apps.GetIconBase64(app.Path)
+		cat := "Suggested"
+		if a.usage.Score(app.Name) > 0 {
+			cat = "Recent"
+		}
+		results = append(results, SearchResult{
+			ID:       app.Name,
+			Title:    app.Name,
+			Subtitle: prettifyPath(app.Path),
+			Icon:     icon,
+			Category: cat,
+			Path:     app.Path,
+		})
+	}
+
+	return results
+}
+
+func prettifyPath(path string) string {
+	home, _ := os.UserHomeDir()
+	if strings.HasPrefix(path, home) {
+		return "~" + path[len(home):]
+	}
+	return path
+}
+
+var procShellExecute = syscall.NewLazyDLL("shell32.dll").NewProc("ShellExecuteW")
+
+func runAsAdmin(path string) error {
+	verb, _ := syscall.UTF16PtrFromString("runas")
+	exe, _ := syscall.UTF16PtrFromString(path)
+	cwd, _ := syscall.UTF16PtrFromString(filepath.Dir(path))
+
+	ret, _, _ := procShellExecute.Call(
+		0,
+		uintptr(unsafe.Pointer(verb)),
+		uintptr(unsafe.Pointer(exe)),
+		0,
+		uintptr(unsafe.Pointer(cwd)),
+		1, // SW_SHOWNORMAL
+	)
+
+	if ret <= 32 {
+		return fmt.Errorf("ShellExecute failed with code %d", ret)
+	}
+	return nil
+}

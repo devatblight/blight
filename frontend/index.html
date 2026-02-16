@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>blight</title>
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <!-- Splash / Onboarding Overlay -->
+    <div id="splash" class="splash hidden">
+      <div class="splash-container">
+        <div class="splash-slides">
+          <!-- Slide 1: Welcome -->
+          <div class="splash-slide active" data-slide="0">
+            <div class="splash-logo">
+              <div class="logo-icon">
+                <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+                  <defs>
+                    <linearGradient
+                      id="logo-grad"
+                      x1="0%"
+                      y1="0%"
+                      x2="100%"
+                      y2="100%"
+                    >
+                      <stop offset="0%" style="stop-color: #4a9eff" />
+                      <stop offset="100%" style="stop-color: #7c3aed" />
+                    </linearGradient>
+                  </defs>
+                  <rect
+                    x="4"
+                    y="4"
+                    width="56"
+                    height="56"
+                    rx="14"
+                    fill="url(#logo-grad)"
+                  />
+                  <text
+                    x="32"
+                    y="44"
+                    text-anchor="middle"
+                    fill="white"
+                    font-size="32"
+                    font-weight="700"
+                    font-family="Inter, system-ui, sans-serif"
+                  >
+                    B
+                  </text>
+                </svg>
+              </div>
+              <h1 class="splash-title">
+                Welcome to <span class="brand">blight</span>
+              </h1>
+              <p class="splash-desc">
+                A blazing-fast launcher at your fingertips.<br />Search apps,
+                run commands, and more — all from your keyboard.
+              </p>
+            </div>
+          </div>
+
+          <!-- Slide 2: Hotkey -->
+          <div class="splash-slide" data-slide="1">
+            <div class="splash-content">
+              <div class="splash-icon-large">⌨️</div>
+              <h2>Your Launch Shortcut</h2>
+              <p>Press this hotkey anywhere to summon blight instantly.</p>
+              <div class="hotkey-display">
+                <kbd>Alt</kbd> <span class="hotkey-plus">+</span>
+                <kbd>Space</kbd>
+              </div>
+              <p class="splash-hint">You can change this later in settings.</p>
+            </div>
+          </div>
+
+          <!-- Slide 3: Quick Tour -->
+          <div class="splash-slide" data-slide="2">
+            <div class="splash-content">
+              <div class="splash-icon-large">🚀</div>
+              <h2>How It Works</h2>
+              <div class="tour-steps">
+                <div class="tour-step">
+                  <div class="tour-num">1</div>
+                  <div>
+                    <strong>Type</strong> to search apps, files, and commands
+                  </div>
+                </div>
+                <div class="tour-step">
+                  <div class="tour-num">2</div>
+                  <div>
+                    <strong>Navigate</strong> with <kbd>↑</kbd>
+                    <kbd>↓</kbd> arrow keys
+                  </div>
+                </div>
+                <div class="tour-step">
+                  <div class="tour-num">3</div>
+                  <div><strong>Execute</strong> with <kbd>Enter</kbd></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Slide 4: Ready -->
+          <div class="splash-slide" data-slide="3">
+            <div class="splash-content">
+              <div class="splash-icon-large">✨</div>
+              <h2>You're All Set</h2>
+              <p>blight is ready to make your workflow faster.</p>
+              <button id="splash-go" class="splash-btn-primary">
+                Let's Go
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Navigation -->
+        <div class="splash-nav">
+          <button id="splash-skip" class="splash-btn-skip">Skip</button>
+          <div class="splash-dots">
+            <div class="splash-dot active" data-dot="0"></div>
+            <div class="splash-dot" data-dot="1"></div>
+            <div class="splash-dot" data-dot="2"></div>
+            <div class="splash-dot" data-dot="3"></div>
+          </div>
+          <button id="splash-next" class="splash-btn-next">Next →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Launcher UI -->
+    <div id="app" class="launcher hidden">
+      <!-- Search Bar -->
+      <div class="search-container">
+        <div class="search-icon">
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+        </div>
+        <input
+          id="search-input"
+          type="text"
+          placeholder="Search apps, commands, files…"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <div class="search-shortcut">
+          <kbd>Esc</kbd>
+        </div>
+      </div>
+
+      <!-- Divider -->
+      <div class="divider"></div>
+
+      <!-- Results -->
+      <div id="results" class="results-container">
+        <!-- Results are rendered by JS -->
+      </div>
+
+      <div class="footer">
+        <div class="footer-left">
+          <span id="footer-brand" class="footer-brand">blight</span>
+          <div id="footer-toast" class="toast"></div>
+        </div>
+        <div class="footer-right">
+          <div class="footer-actions">
+            <span class="footer-hint"><kbd>↑↓</kbd> Navigate</span>
+            <span class="footer-hint"><kbd>↵</kbd> Open</span>
+            <span class="footer-hint"><kbd>Esc</kbd> Close</span>
+          </div>
+          <div id="notification-indicator" class="notification-indicator">
+            <span id="notif-icon" class="notif-icon"></span>
+            <span id="notif-text" class="notif-text"></span>
+          </div>
+        </div>
+        <div id="notification-history" class="notification-history hidden">
+          <div class="notif-history-header">
+            <span>Notifications</span>
+            <button id="notif-clear" class="notif-clear">Clear</button>
+          </div>
+          <div id="notif-history-list" class="notif-history-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Context Menu -->
+    <div id="context-menu" class="context-menu hidden"></div>
+
+    <script src="./src/main.js" type="module"></script>
+  </body>
+</html>
