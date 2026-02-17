@@ -29,10 +29,10 @@ func Fuzzy(query string, targets []string, usageScores []int) []Match {
 	minScore := 50
 
 	for i, target := range targets {
-		s := score(query, strings.ToLower(target))
-		if s >= minScore {
-			s += usageScores[i] * 100
-			matches = append(matches, Match{Score: s, Index: i})
+		matchScore := score(query, strings.ToLower(target))
+		if matchScore >= minScore {
+			matchScore += usageScores[i] * 100
+			matches = append(matches, Match{Score: matchScore, Index: i})
 		}
 	}
 
@@ -51,33 +51,33 @@ func score(query, target string) int {
 		return 2000 + len(query)*5
 	}
 
-	qi := 0
+	queryIndex := 0
 	consecutive := 0
 	maxConsecutive := 0
 	total := 0
 	wordBoundaryBonus := 0
 	firstCharBonus := 0
 
-	for ti := 0; ti < len(target) && qi < len(query); ti++ {
-		if target[ti] == query[qi] {
+	for targetIndex := 0; targetIndex < len(target) && queryIndex < len(query); targetIndex++ {
+		if target[targetIndex] == query[queryIndex] {
 			total += 10
 			consecutive++
 			if consecutive > maxConsecutive {
 				maxConsecutive = consecutive
 			}
-			if qi == 0 && ti == 0 {
+			if queryIndex == 0 && targetIndex == 0 {
 				firstCharBonus = 50
 			}
-			if ti > 0 && isWordBoundary(rune(target[ti-1])) {
+			if targetIndex > 0 && isWordBoundary(rune(target[targetIndex-1])) {
 				wordBoundaryBonus += 25
 			}
-			qi++
+			queryIndex++
 		} else {
 			consecutive = 0
 		}
 	}
 
-	if qi < len(query) {
+	if queryIndex < len(query) {
 		return 0
 	}
 
@@ -90,10 +90,10 @@ func isWordBoundary(r rune) bool {
 
 func sortByScore(matches []Match) {
 	for i := 1; i < len(matches); i++ {
-		j := i
-		for j > 0 && matches[j].Score > matches[j-1].Score {
-			matches[j], matches[j-1] = matches[j-1], matches[j]
-			j--
+		current := i
+		for current > 0 && matches[current].Score > matches[current-1].Score {
+			matches[current], matches[current-1] = matches[current-1], matches[current]
+			current--
 		}
 	}
 }

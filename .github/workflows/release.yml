@@ -1,0 +1,188 @@
+name: Release
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'frontend/package.json'
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      version: ${{ steps.check.outputs.version }}
+      tag: ${{ steps.check.outputs.tag }}
+      prerelease: ${{ steps.check.outputs.prerelease }}
+      channel: ${{ steps.check.outputs.channel }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for version bump
+        id: check
+        run: |
+          VERSION=$(node -p "require('./frontend/package.json').version")
+          BRANCH="${GITHUB_REF#refs/heads/}"
+
+          # Determine release channel from branch
+          if [ "$BRANCH" = "main" ]; then
+            CHANNEL="alpha"
+          elif [ "$BRANCH" = "dev" ]; then
+            CHANNEL="prelight"
+          else
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          TAG="v${VERSION}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "channel=${CHANNEL}" >> "$GITHUB_OUTPUT"
+          echo "prerelease=true" >> "$GITHUB_OUTPUT"
+
+          # Check if this tag already exists
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists, skipping release"
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "New version detected: $VERSION ($CHANNEL)"
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: check-version
+    if: needs.check-version.outputs.should_release == 'true'
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+            extension: .exe
+            artifact_name: blight-windows-amd64.exe
+          - os: ubuntu-latest
+            platform: linux
+            extension: ''
+            artifact_name: blight-linux-amd64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install
+
+      - name: Build
+        run: wails build
+
+      - name: Rename artifact
+        shell: bash
+        run: |
+          if [ "${{ matrix.platform }}" = "windows" ]; then
+            cp build/bin/blight.exe ${{ matrix.artifact_name }}
+          else
+            cp build/bin/blight ${{ matrix.artifact_name }}
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_name }}
+
+  release:
+    needs: [check-version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get the previous tag (if any)
+          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+          {
+            echo "changelog<<CHANGELOG_EOF"
+
+            if [ -z "$PREV_TAG" ]; then
+              echo "### Initial Release"
+              echo ""
+              git log --oneline --no-merges | head -30
+            else
+              echo "### Changes since ${PREV_TAG}"
+              echo ""
+              git log "${PREV_TAG}..HEAD" --oneline --no-merges
+            fi
+
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.check-version.outputs.tag }}
+          name: "blight ${{ needs.check-version.outputs.tag }} (${{ needs.check-version.outputs.channel }})"
+          prerelease: ${{ needs.check-version.outputs.prerelease }}
+          generate_release_notes: false
+          body: |
+            # blight ${{ needs.check-version.outputs.tag }}
+
+            > **${{ needs.check-version.outputs.channel }}** release
+
+            > [!WARNING]
+            > This is a **${{ needs.check-version.outputs.channel }}** build. Bugs may occur and features may be incomplete or change without notice. Please report issues on the [issues page](../../issues).
+
+            ## What's Changed
+
+            ${{ steps.changelog.outputs.changelog }}
+
+            ## Downloads
+
+            | Platform | File |
+            |----------|------|
+            | Windows (x64) | `blight-windows-amd64.exe` |
+            | Linux (x64) | `blight-linux-amd64` |
+
+            ---
+
+            *Built from `${{ github.ref_name }}` branch at `${{ github.sha }}`*
+          files: |
+            artifacts/blight-windows-amd64.exe/*
+            artifacts/blight-linux-amd64/*

@@ -195,8 +195,8 @@ func (a *App) Search(query string) []SearchResult {
 		}
 	}
 
-	ql := strings.ToLower(query)
-	if strings.HasPrefix(ql, "cb ") || strings.HasPrefix(ql, "clip ") || ql == "clipboard" || ql == "cb" || ql == "clip" {
+	queryLower := strings.ToLower(query)
+	if strings.HasPrefix(queryLower, "cb ") || strings.HasPrefix(queryLower, "clip ") || queryLower == "clipboard" || queryLower == "cb" || queryLower == "clip" {
 		entries := a.clipboard.Entries()
 		limit := 8
 		if len(entries) < limit {
@@ -399,16 +399,16 @@ func (a *App) searchFiles(query string) []SearchResult {
 }
 
 func (a *App) searchSystemCommands(query string) []SearchResult {
-	ql := strings.ToLower(query)
+	queryLower := strings.ToLower(query)
 	var results []SearchResult
 
 	for _, cmd := range commands.SystemCommands {
 		matched := false
-		if strings.Contains(strings.ToLower(cmd.Name), ql) {
+		if strings.Contains(strings.ToLower(cmd.Name), queryLower) {
 			matched = true
 		}
-		for _, kw := range cmd.Keywords {
-			if strings.Contains(kw, ql) {
+		for _, keyword := range cmd.Keywords {
+			if strings.Contains(keyword, queryLower) {
 				matched = true
 				break
 			}
@@ -444,14 +444,19 @@ func (a *App) searchApps(query string) []SearchResult {
 		limit = len(matches)
 	}
 
-	for _, m := range matches[:limit] {
-		app := allApps[m.Index]
+	for _, match := range matches[:limit] {
+		app := allApps[match.Index]
 		icon := apps.GetIconBase64(app.Path)
+
+		subtitle := "Application"
+		if !app.IsLnk {
+			subtitle = prettifyPath(app.Path)
+		}
 
 		results = append(results, SearchResult{
 			ID:       app.Name,
 			Title:    app.Name,
-			Subtitle: prettifyPath(app.Path),
+			Subtitle: subtitle,
 			Icon:     icon,
 			Category: "Applications",
 			Path:     app.Path,
@@ -477,19 +482,23 @@ func (a *App) getDefaultResults() []SearchResult {
 	}
 
 	var results []SearchResult
-	for _, m := range matches[:count] {
-		app := allApps[m.Index]
+	for _, match := range matches[:count] {
+		app := allApps[match.Index]
 		icon := apps.GetIconBase64(app.Path)
-		cat := "Suggested"
+		category := "Suggested"
 		if a.usage.Score(app.Name) > 0 {
-			cat = "Recent"
+			category = "Recent"
+		}
+		subtitle := "Application"
+		if !app.IsLnk {
+			subtitle = prettifyPath(app.Path)
 		}
 		results = append(results, SearchResult{
 			ID:       app.Name,
 			Title:    app.Name,
-			Subtitle: prettifyPath(app.Path),
+			Subtitle: subtitle,
 			Icon:     icon,
-			Category: cat,
+			Category: category,
 			Path:     app.Path,
 		})
 	}

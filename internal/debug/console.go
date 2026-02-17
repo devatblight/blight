@@ -147,10 +147,13 @@ const consoleHTML = `<!DOCTYPE html>
   .log-entry {
     padding: 3px 16px;
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-start;
-    gap: 10px;
+    gap: 4px 10px;
     border-bottom: 1px solid #1a1a1a;
     transition: background 0.1s;
+    cursor: pointer;
+    position: relative;
   }
 
   .log-entry:hover { background: #151515; }
@@ -158,6 +161,27 @@ const consoleHTML = `<!DOCTYPE html>
   .log-entry.level-error:hover { background: rgba(248, 113, 113, 0.08); }
   .log-entry.level-warn { background: rgba(251, 191, 36, 0.03); }
   .log-entry.level-fatal { background: rgba(248, 113, 113, 0.1); border-left: 3px solid #f87171; }
+
+  .log-summary {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .log-chevron {
+    flex-shrink: 0;
+    color: #444;
+    font-size: 10px;
+    width: 12px;
+    text-align: center;
+    transition: transform 0.15s;
+    user-select: none;
+    line-height: 1.6;
+  }
+
+  .log-entry.expanded .log-chevron { transform: rotate(90deg); color: #888; }
 
   .log-time {
     color: #555;
@@ -184,7 +208,9 @@ const consoleHTML = `<!DOCTYPE html>
 
   .log-message {
     flex: 1;
-    word-break: break-word;
+    min-width: 0;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
     color: #d4d4d4;
   }
 
@@ -201,24 +227,77 @@ const consoleHTML = `<!DOCTYPE html>
 
   .log-source .fn { color: #888; }
 
-  .log-fields {
+  .log-copy-btn {
+    flex-shrink: 0;
+    background: none;
+    border: 1px solid transparent;
+    color: #444;
+    font-family: inherit;
     font-size: 10px;
-    color: #666;
-    margin-top: 2px;
-    padding-left: 142px;
-    white-space: pre-wrap;
-    word-break: break-all;
+    cursor: pointer;
+    padding: 1px 5px;
+    border-radius: 3px;
+    transition: all 0.15s;
+    opacity: 0;
   }
 
-  .log-fields .field-key { color: #a78bfa; }
-  .log-fields .field-val { color: #86efac; }
+  .log-entry:hover .log-copy-btn { opacity: 1; }
+  .log-copy-btn:hover { color: #aaa; border-color: #444; background: #252525; }
+  .log-copy-btn.copied { color: #4ade80; }
+
+  .log-details {
+    width: 100%;
+    display: none;
+    padding: 6px 0 6px 22px;
+  }
+
+  .log-entry.expanded .log-details { display: block; }
+
+  .log-detail-row {
+    display: flex;
+    gap: 8px;
+    font-size: 10px;
+    padding: 2px 0;
+    min-width: 0;
+  }
+
+  .log-detail-label {
+    color: #555;
+    flex-shrink: 0;
+    min-width: 60px;
+    text-align: right;
+  }
+
+  .log-detail-value {
+    color: #d4d4d4;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .log-detail-value.field-key { color: #a78bfa; }
+  .log-detail-value.field-val { color: #86efac; }
+
+  .log-fields-detail {
+    font-size: 10px;
+    padding: 4px 0;
+  }
+
+  .log-field-pair {
+    display: flex;
+    gap: 4px;
+    padding: 1px 0;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
 
   .stack-trace {
     font-size: 10px;
     color: #f87171;
     margin-top: 4px;
-    padding-left: 142px;
-    white-space: pre;
+    white-space: pre-wrap;
+    word-wrap: break-word;
     opacity: 0.8;
     max-height: 200px;
     overflow-y: auto;
@@ -270,6 +349,25 @@ const consoleHTML = `<!DOCTYPE html>
     0% { background: rgba(96, 165, 250, 0.15); }
     100% { background: transparent; }
   }
+
+  .copy-toast {
+    position: fixed;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #252525;
+    border: 1px solid #444;
+    color: #e0e0e0;
+    padding: 6px 16px;
+    border-radius: 6px;
+    font-size: 11px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  .copy-toast.visible { opacity: 1; }
 </style>
 </head>
 <body>
@@ -277,6 +375,7 @@ const consoleHTML = `<!DOCTYPE html>
 <div id="header">
   <h1><span class="dot" id="status-dot"></span> blight debug console</h1>
   <div class="header-actions">
+    <button onclick="copyAllLogs()">⎘ Copy All</button>
     <button onclick="scrollToBottom()">↓ Bottom</button>
     <button onclick="clearLogs()">Clear</button>
     <button onclick="toggleAutoScroll()" id="autoscroll-btn">Auto-scroll: ON</button>
@@ -293,6 +392,7 @@ const consoleHTML = `<!DOCTYPE html>
 </div>
 
 <div id="log-container"></div>
+<div class="copy-toast" id="copy-toast">Copied!</div>
 
 <div id="footer">
   <span id="log-count">0 entries</span>
@@ -336,34 +436,113 @@ function addEntry(entry) {
 function renderEntry(entry) {
   const div = document.createElement('div');
   div.className = 'log-entry level-' + entry.level.toLowerCase() + ' new-entry-flash';
+  div.dataset.entryIndex = entries.indexOf(entry);
   setTimeout(() => div.classList.remove('new-entry-flash'), 300);
 
-  let fieldsHTML = '';
+  const hasDetails = (entry.fields && Object.keys(entry.fields).length > 0) || entry.function || entry.file;
+
+  // Build detail panel (collapsed by default)
+  let detailsHTML = '<div class="log-details">';
+  // Source info
+  if (entry.function || entry.file) {
+    detailsHTML += '<div class="log-detail-row"><span class="log-detail-label">source</span><span class="log-detail-value">' + escapeHTML(entry.function) + '</span></div>';
+    detailsHTML += '<div class="log-detail-row"><span class="log-detail-label">file</span><span class="log-detail-value">' + escapeHTML(entry.file + ':' + entry.line) + '</span></div>';
+  }
+  detailsHTML += '<div class="log-detail-row"><span class="log-detail-label">time</span><span class="log-detail-value">' + escapeHTML(entry.time) + '</span></div>';
+  // Fields
   if (entry.fields && Object.keys(entry.fields).length > 0) {
     const stack = entry.fields.stack;
     const otherFields = Object.entries(entry.fields).filter(([k]) => k !== 'stack');
-
     if (otherFields.length > 0) {
-      fieldsHTML += '<div class="log-fields">' +
-        otherFields.map(([k, v]) =>
-          '<span class="field-key">' + k + '</span>=<span class="field-val">' +
-          (typeof v === 'string' ? v : JSON.stringify(v)) + '</span>'
-        ).join('  ') + '</div>';
+      detailsHTML += '<div class="log-fields-detail">';
+      otherFields.forEach(([k, v]) => {
+        const val = typeof v === 'string' ? v : JSON.stringify(v);
+        detailsHTML += '<div class="log-field-pair"><span class="log-detail-value field-key">' + escapeHTML(k) + '</span><span class="log-detail-value field-val">' + escapeHTML(val) + '</span></div>';
+      });
+      detailsHTML += '</div>';
     }
-
     if (stack) {
-      fieldsHTML += '<div class="stack-trace">' + escapeHTML(stack) + '</div>';
+      detailsHTML += '<div class="stack-trace">' + escapeHTML(stack) + '</div>';
+    }
+  }
+  detailsHTML += '</div>';
+
+  // Inline field preview (shown in collapsed state)
+  let inlineFields = '';
+  if (entry.fields) {
+    const otherFields = Object.entries(entry.fields).filter(([k]) => k !== 'stack');
+    if (otherFields.length > 0) {
+      const preview = otherFields.map(([k, v]) => k + '=' + (typeof v === 'string' ? v : JSON.stringify(v))).join('  ');
+      const truncated = preview.length > 80 ? preview.substring(0, 80) + '…' : preview;
+      inlineFields = ' <span style="color:#555;font-size:10px">' + escapeHTML(truncated) + '</span>';
     }
   }
 
   div.innerHTML =
-    '<span class="log-time">' + entry.time + '</span>' +
-    '<span class="log-level ' + entry.level + '">' + entry.level + '</span>' +
-    '<span class="log-message">' + escapeHTML(entry.message) + '</span>' +
-    '<span class="log-source"><span class="fn">' + entry.function + '</span> ' + entry.file + ':' + entry.line + '</span>' +
-    fieldsHTML;
+    '<div class="log-summary">' +
+      (hasDetails ? '<span class="log-chevron">▶</span>' : '<span class="log-chevron" style="visibility:hidden">▶</span>') +
+      '<span class="log-time">' + entry.time + '</span>' +
+      '<span class="log-level ' + entry.level + '">' + entry.level + '</span>' +
+      '<span class="log-message">' + escapeHTML(entry.message) + inlineFields + '</span>' +
+      '<button class="log-copy-btn" onclick="copyEntry(event, ' + entries.indexOf(entry) + ')" title="Copy log">⎘</button>' +
+    '</div>' +
+    detailsHTML;
+
+  // Click to expand/collapse
+  div.querySelector('.log-summary').addEventListener('click', (e) => {
+    if (e.target.classList.contains('log-copy-btn')) return;
+    div.classList.toggle('expanded');
+  });
 
   return div;
+}
+
+function copyEntry(event, index) {
+  event.stopPropagation();
+  const entry = entries[index];
+  if (!entry) return;
+
+  let text = '[' + entry.time + '] [' + entry.level + '] ' + entry.message;
+  if (entry.function) text += '\n  source: ' + entry.function;
+  if (entry.file) text += '\n  file: ' + entry.file + ':' + entry.line;
+  if (entry.fields) {
+    Object.entries(entry.fields).forEach(([k, v]) => {
+      text += '\n  ' + k + ': ' + (typeof v === 'string' ? v : JSON.stringify(v));
+    });
+  }
+
+  navigator.clipboard.writeText(text);
+  const btn = event.target;
+  btn.classList.add('copied');
+  btn.textContent = '✓';
+  setTimeout(() => { btn.classList.remove('copied'); btn.textContent = '⎘'; }, 1000);
+  showCopyToast('Log entry copied');
+}
+
+function copyAllLogs() {
+  const visible = entries.filter(e => isVisible(e));
+  const text = visible.map(entry => {
+    let line = '[' + entry.time + '] [' + entry.level + '] ' + entry.message;
+    if (entry.function) line += '  (' + entry.function + ' ' + entry.file + ':' + entry.line + ')';
+    if (entry.fields) {
+      const fieldPairs = Object.entries(entry.fields)
+        .filter(([k]) => k !== 'stack')
+        .map(([k, v]) => k + '=' + (typeof v === 'string' ? v : JSON.stringify(v)));
+      if (fieldPairs.length > 0) line += '\n  ' + fieldPairs.join('  ');
+      if (entry.fields.stack) line += '\n  ' + entry.fields.stack;
+    }
+    return line;
+  }).join('\n');
+
+  navigator.clipboard.writeText(text);
+  showCopyToast(visible.length + ' log entries copied');
+}
+
+function showCopyToast(message) {
+  const toast = document.getElementById('copy-toast');
+  toast.textContent = message;
+  toast.classList.add('visible');
+  setTimeout(() => toast.classList.remove('visible'), 1500);
 }
 
 function isVisible(entry) {

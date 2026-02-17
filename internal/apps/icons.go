@@ -7,6 +7,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"strings"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -16,7 +17,9 @@ var (
 	shell32            = syscall.NewLazyDLL("shell32.dll")
 	user32             = syscall.NewLazyDLL("user32.dll")
 	gdi32              = syscall.NewLazyDLL("gdi32.dll")
+	ole32              = syscall.NewLazyDLL("ole32.dll")
 	procSHGetFileInfo  = shell32.NewProc("SHGetFileInfoW")
+	procSHGetImageList = shell32.NewProc("SHGetImageList")
 	procDestroyIcon    = user32.NewProc("DestroyIcon")
 	procGetIconInfo    = user32.NewProc("GetIconInfo")
 	procGetDIBits      = gdi32.NewProc("GetDIBits")
@@ -24,14 +27,30 @@ var (
 	procDeleteDC       = gdi32.NewProc("DeleteDC")
 	procDeleteObject   = gdi32.NewProc("DeleteObject")
 	procGetObject      = gdi32.NewProc("GetObjectW")
+	procCoInitializeEx = ole32.NewProc("CoInitializeEx")
 )
 
 const (
-	shgfiIcon      = 0x000000100
-	shgfiSmallIcon = 0x000000001
-	shgfiLargeIcon = 0x000000000
-	biRGB          = 0
+	shgfiIcon         = 0x000000100
+	shgfiSmallIcon    = 0x000000001
+	shgfiLargeIcon    = 0x000000000
+	shgfiSYSICONINDEX = 0x000004000
+	biRGB             = 0
+
+	// Image list sizes
+	SHIL_LARGE      = 0 // 32x32
+	SHIL_SMALL      = 1 // 16x16
+	SHIL_EXTRALARGE = 2 // 48x48
+	SHIL_JUMBO      = 4 // 256x256 (Vista+)
 )
+
+// IID_IImageList GUID
+var IID_IImageList = syscall.GUID{
+	Data1: 0x46EB5926,
+	Data2: 0x582E,
+	Data3: 0x4017,
+	Data4: [8]byte{0x9F, 0xDF, 0xE8, 0x99, 0x8D, 0xAA, 0x09, 0x50},
+}
 
 type shFileInfo struct {
 	HIcon         syscall.Handle
@@ -73,18 +92,96 @@ type bitmapInfoHeader struct {
 	ClrImportant  uint32
 }
 
-var iconCache sync.Map
+var (
+	iconCache   sync.Map
+	comInitOnce sync.Once
+)
 
 func GetIconBase64(path string) string {
 	if cached, ok := iconCache.Load(path); ok {
 		return cached.(string)
 	}
 
-	data := extractIcon(path)
+	iconPath := path
+
+	// For .lnk files, resolve the target to avoid the shortcut arrow overlay.
+	// 1. Try to find a .ico file in the target app's directory (highest quality)
+	// 2. Otherwise extract from the target exe (not the .lnk)
+	if strings.HasSuffix(strings.ToLower(path), ".lnk") {
+		targetPath := ResolveLnkTarget(path)
+		if targetPath != "" {
+			// Check for a .ico file in the app directory
+			icoPath := FindAppIcon(targetPath)
+			if icoPath != "" {
+				iconPath = icoPath
+			} else {
+				iconPath = targetPath
+			}
+		}
+	}
+
+	data := extractIconHQ(iconPath)
+	if data == "" {
+		data = extractIcon(iconPath)
+	}
 	iconCache.Store(path, data)
 	return data
 }
 
+// extractIconHQ extracts a 48x48 (extra-large) icon via SHGetImageList.
+// This produces crisp high-quality icons like Flow Launcher / Raycast.
+func extractIconHQ(path string) string {
+	comInitOnce.Do(func() {
+		procCoInitializeEx.Call(0, 0)
+	})
+
+	pathPtr, err := syscall.UTF16PtrFromString(path)
+	if err != nil {
+		return ""
+	}
+
+	// Get the system icon index for this file
+	var sfi shFileInfo
+	ret, _, _ := procSHGetFileInfo.Call(
+		uintptr(unsafe.Pointer(pathPtr)),
+		0,
+		uintptr(unsafe.Pointer(&sfi)),
+		unsafe.Sizeof(sfi),
+		shgfiSYSICONINDEX,
+	)
+	if ret == 0 {
+		return ""
+	}
+	iconIndex := sfi.IIcon
+
+	// Get the extra-large (48x48) system image list
+	var imageList uintptr
+	hr, _, _ := procSHGetImageList.Call(
+		SHIL_EXTRALARGE,
+		uintptr(unsafe.Pointer(&IID_IImageList)),
+		uintptr(unsafe.Pointer(&imageList)),
+	)
+	if hr != 0 || imageList == 0 {
+		return ""
+	}
+
+	// IImageList::GetIcon is the 9th method in the vtable (index 8, 0-based)
+	// https://learn.microsoft.com/en-us/windows/win32/api/commoncontrols/nf-commoncontrols-iimagelist-geticon
+	vtable := *(*[20]uintptr)(unsafe.Pointer(*(*uintptr)(unsafe.Pointer(imageList))))
+	getIconFn := vtable[9] // GetIcon is at index 9
+
+	var hIcon uintptr
+	// ILD_TRANSPARENT = 1
+	syscall.SyscallN(getIconFn, imageList, uintptr(iconIndex), 1, uintptr(unsafe.Pointer(&hIcon)))
+	if hIcon == 0 {
+		return ""
+	}
+	defer procDestroyIcon.Call(hIcon)
+
+	return hIconToPngBase64(syscall.Handle(hIcon))
+}
+
+// extractIcon is the fallback — uses SHGetFileInfo with SHGFI_LARGEICON (32x32).
 func extractIcon(path string) string {
 	pathPtr, err := syscall.UTF16PtrFromString(path)
 	if err != nil {

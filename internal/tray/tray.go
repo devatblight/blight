@@ -1,37 +1,40 @@
 package tray
 
 import (
+	"blight/internal/debug"
+	"fmt"
 	"runtime"
 	"syscall"
 	"unsafe"
 )
 
 var (
-	shell32             = syscall.NewLazyDLL("shell32.dll")
-	user32              = syscall.NewLazyDLL("user32.dll")
-	kernel32            = syscall.NewLazyDLL("kernel32.dll")
-	procShellNotifyIcon = shell32.NewProc("Shell_NotifyIconW")
-	procCreatePopupMenu = user32.NewProc("CreatePopupMenu")
-	procAppendMenu      = user32.NewProc("AppendMenuW")
-	procTrackPopupMenu  = user32.NewProc("TrackPopupMenuEx")
-	procCreateWindowEx  = user32.NewProc("CreateWindowExW")
-	procDefWindowProc   = user32.NewProc("DefWindowProcW")
-	procRegisterClassEx = user32.NewProc("RegisterClassExW")
-	procGetMessage      = user32.NewProc("GetMessageW")
-	procTranslateMsg    = user32.NewProc("TranslateMessage")
-	procDispatchMsg     = user32.NewProc("DispatchMessageW")
-	procDestroyMenu     = user32.NewProc("DestroyMenu")
-	procGetCursorPos    = user32.NewProc("GetCursorPos")
-	procSetForeground   = user32.NewProc("SetForegroundWindow")
-	procPostMessage     = user32.NewProc("PostMessageW")
-	procGetModuleHandle = kernel32.NewProc("GetModuleHandleW")
-	procLoadIcon        = user32.NewProc("LoadIconW")
+	shell32               = syscall.NewLazyDLL("shell32.dll")
+	user32                = syscall.NewLazyDLL("user32.dll")
+	kernel32              = syscall.NewLazyDLL("kernel32.dll")
+	procShellNotifyIcon   = shell32.NewProc("Shell_NotifyIconW")
+	procExtractIconEx     = shell32.NewProc("ExtractIconExW")
+	procCreatePopupMenu   = user32.NewProc("CreatePopupMenu")
+	procAppendMenu        = user32.NewProc("AppendMenuW")
+	procTrackPopupMenu    = user32.NewProc("TrackPopupMenuEx")
+	procCreateWindowEx    = user32.NewProc("CreateWindowExW")
+	procDefWindowProc     = user32.NewProc("DefWindowProcW")
+	procRegisterClassEx   = user32.NewProc("RegisterClassExW")
+	procGetMessage        = user32.NewProc("GetMessageW")
+	procTranslateMsg      = user32.NewProc("TranslateMessage")
+	procDispatchMsg       = user32.NewProc("DispatchMessageW")
+	procDestroyMenu       = user32.NewProc("DestroyMenu")
+	procGetCursorPos      = user32.NewProc("GetCursorPos")
+	procSetForeground     = user32.NewProc("SetForegroundWindow")
+	procPostMessage       = user32.NewProc("PostMessageW")
+	procGetModuleHandle   = kernel32.NewProc("GetModuleHandleW")
+	procLoadIcon          = user32.NewProc("LoadIconW")
+	procGetModuleFileName = kernel32.NewProc("GetModuleFileNameW")
 )
 
 const (
 	NIM_ADD    = 0x00000000
 	NIM_DELETE = 0x00000002
-	NIM_MODIFY = 0x00000001
 
 	NIF_MESSAGE = 0x00000001
 	NIF_ICON    = 0x00000002
@@ -125,7 +128,42 @@ func (t *TrayIcon) Stop() {
 	}
 }
 
+func loadExeIcon() uintptr {
+	log := debug.Get()
+
+	// Get path to the running executable
+	buf := make([]uint16, 260)
+	length, _, _ := procGetModuleFileName.Call(0, uintptr(unsafe.Pointer(&buf[0])), 260)
+	if length == 0 {
+		log.Error("tray: GetModuleFileName failed")
+		return 0
+	}
+	exePath := syscall.UTF16ToString(buf[:length])
+	log.Debug("tray: loading icon from exe", map[string]interface{}{"path": exePath})
+
+	// ExtractIconExW to get the first large icon from the exe
+	exePathPtr, _ := syscall.UTF16PtrFromString(exePath)
+	var largeIcon uintptr
+	count, _, _ := procExtractIconEx.Call(
+		uintptr(unsafe.Pointer(exePathPtr)),
+		0,
+		uintptr(unsafe.Pointer(&largeIcon)),
+		0,
+		1,
+	)
+	if count > 0 && largeIcon != 0 {
+		log.Info("tray: loaded icon from executable")
+		return largeIcon
+	}
+
+	log.Debug("tray: no icon in exe, falling back to system default")
+	return 0
+}
+
 func (t *TrayIcon) run() {
+	log := debug.Get()
+	log.Info("tray: starting system tray icon")
+
 	// Window message processing MUST stay on one OS thread
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
@@ -133,14 +171,23 @@ func (t *TrayIcon) run() {
 	hInstance, _, _ := procGetModuleHandle.Call(0)
 	className, _ := syscall.UTF16PtrFromString("BlightTray")
 
-	wc := WNDCLASSEXW{
+	wndProcCallback := syscall.NewCallback(t.wndProc)
+
+	windowClass := WNDCLASSEXW{
 		CbSize:        uint32(unsafe.Sizeof(WNDCLASSEXW{})),
-		LpfnWndProc:   syscall.NewCallback(t.wndProc),
+		LpfnWndProc:   wndProcCallback,
 		HInstance:     hInstance,
 		LpszClassName: className,
 	}
 
-	procRegisterClassEx.Call(uintptr(unsafe.Pointer(&wc)))
+	atom, _, registerErr := procRegisterClassEx.Call(uintptr(unsafe.Pointer(&windowClass)))
+	if atom == 0 {
+		log.Error("tray: RegisterClassEx failed", map[string]interface{}{
+			"error": fmt.Sprintf("%v", registerErr),
+		})
+		return
+	}
+	log.Debug("tray: window class registered")
 
 	t.hwnd, _, _ = procCreateWindowEx.Call(
 		0,
@@ -150,8 +197,18 @@ func (t *TrayIcon) run() {
 		hInstance, 0,
 	)
 
-	// Use system default icon
-	hIcon, _, _ := procLoadIcon.Call(0, IDI_APPLICATION)
+	if t.hwnd == 0 {
+		log.Error("tray: CreateWindowEx failed")
+		return
+	}
+	log.Debug("tray: hidden window created", map[string]interface{}{"hwnd": fmt.Sprintf("0x%X", t.hwnd)})
+
+	// Try to load icon from exe, fall back to system default
+	iconHandle := loadExeIcon()
+	if iconHandle == 0 {
+		iconHandle, _, _ = procLoadIcon.Call(0, IDI_APPLICATION)
+	}
+	log.Debug("tray: icon handle", map[string]interface{}{"handle": fmt.Sprintf("0x%X", iconHandle)})
 
 	t.nid = NOTIFYICONDATAW{
 		CbSize:           uint32(unsafe.Sizeof(NOTIFYICONDATAW{})),
@@ -159,13 +216,20 @@ func (t *TrayIcon) run() {
 		UID:              1,
 		UFlags:           NIF_MESSAGE | NIF_ICON | NIF_TIP,
 		UCallbackMessage: WM_TRAYICON,
-		HIcon:            hIcon,
+		HIcon:            iconHandle,
 	}
 
 	tip, _ := syscall.UTF16FromString("blight")
 	copy(t.nid.SzTip[:], tip)
 
-	procShellNotifyIcon.Call(NIM_ADD, uintptr(unsafe.Pointer(&t.nid)))
+	addResult, _, addErr := procShellNotifyIcon.Call(NIM_ADD, uintptr(unsafe.Pointer(&t.nid)))
+	if addResult == 0 {
+		log.Error("tray: Shell_NotifyIcon(NIM_ADD) failed", map[string]interface{}{
+			"error": fmt.Sprintf("%v", addErr),
+		})
+		return
+	}
+	log.Info("tray: icon added to system tray")
 
 	// Standard message loop
 	var msg MSG
@@ -175,6 +239,7 @@ func (t *TrayIcon) run() {
 			0, 0, 0,
 		)
 		if ret == 0 || ret == uintptr(^uintptr(0)) {
+			log.Info("tray: message loop ended")
 			break
 		}
 		procTranslateMsg.Call(uintptr(unsafe.Pointer(&msg)))
@@ -187,14 +252,16 @@ func (t *TrayIcon) wndProc(hwnd, msg, wParam, lParam uintptr) uintptr {
 	case WM_TRAYICON:
 		switch lParam {
 		case WM_LBUTTONUP:
+			debug.Get().Debug("tray: left click")
 			t.onShow()
 		case WM_RBUTTONUP:
+			debug.Get().Debug("tray: right click — showing context menu")
 			t.showContextMenu()
 		}
 		return 0
 	case WM_COMMAND:
-		menuID := wParam & 0xFFFF
-		switch menuID {
+		menuItemID := wParam & 0xFFFF
+		switch menuItemID {
 		case IDM_SHOW:
 			t.onShow()
 		case IDM_SETTINGS:
@@ -211,8 +278,11 @@ func (t *TrayIcon) wndProc(hwnd, msg, wParam, lParam uintptr) uintptr {
 }
 
 func (t *TrayIcon) showContextMenu() {
+	log := debug.Get()
+
 	menu, _, _ := procCreatePopupMenu.Call()
 	if menu == 0 {
+		log.Error("tray: CreatePopupMenu failed")
 		return
 	}
 
@@ -225,25 +295,29 @@ func (t *TrayIcon) showContextMenu() {
 	procAppendMenu.Call(menu, MF_SEPARATOR, 0, 0)
 	procAppendMenu.Call(menu, MF_STRING, IDM_QUIT, uintptr(unsafe.Pointer(quitStr)))
 
-	var pt POINT
-	procGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
+	var cursorPosition POINT
+	procGetCursorPos.Call(uintptr(unsafe.Pointer(&cursorPosition)))
 
 	// SetForegroundWindow is required before TrackPopupMenu or the menu won't close properly
 	procSetForeground.Call(t.hwnd)
 
-	// Use TPM_RETURNCMD so the menu item selection is returned directly.
-	// This avoids issues with WM_COMMAND not being delivered.
-	ret, _, _ := procTrackPopupMenu.Call(
+	// Use TPM_RETURNCMD so the selected menu item ID is returned directly
+	// TrackPopupMenuEx(hMenu, uFlags, x, y, hWnd, lptpm) — 6 params
+	selectedItem, _, _ := procTrackPopupMenu.Call(
 		menu,
 		TPM_LEFTALIGN|TPM_BOTTOMALIGN|TPM_RETURNCMD,
-		uintptr(pt.X), uintptr(pt.Y),
-		0, t.hwnd, 0,
+		uintptr(cursorPosition.X), uintptr(cursorPosition.Y),
+		t.hwnd, 0,
 	)
 
 	procDestroyMenu.Call(menu)
 
+	log.Debug("tray: menu selection", map[string]interface{}{
+		"selectedItem": selectedItem,
+	})
+
 	// Process the returned command directly
-	switch ret {
+	switch selectedItem {
 	case IDM_SHOW:
 		t.onShow()
 	case IDM_SETTINGS:

@@ -212,9 +212,14 @@ class Blight {
             }
 
             const selected = index === this.selectedIndex ? 'selected' : '';
-            const iconHtml = result.icon && result.icon.startsWith('data:')
-                ? `<div class="result-icon"><img src="${result.icon}" alt=""/></div>`
-                : `<div class="result-icon-fallback">●</div>`;
+            let iconHtml;
+            if (result.icon && result.icon.startsWith('data:')) {
+                iconHtml = `<div class="result-icon"><img src="${result.icon}" alt=""/></div>`;
+            } else {
+                // Category-aware SVG fallback icons
+                const fallbackSvg = this.getFallbackIcon(result.category);
+                iconHtml = `<div class="result-icon result-icon-fallback">${fallbackSvg}</div>`;
+            }
 
             html += `
                 <div class="result-item ${selected}" data-index="${index}" data-id="${result.id}">
@@ -294,6 +299,43 @@ class Blight {
     hideContextMenu() {
         this.contextMenuEl.classList.add('hidden');
         this.contextTarget = null;
+    }
+
+    // --- Fallback Icons ---
+
+    getFallbackIcon(category) {
+        const c = (category || '').toLowerCase();
+        if (c === 'applications' || c === 'recent' || c === 'suggested') {
+            // App icon: rounded square with grid
+            return `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="2" y="2" width="20" height="20" rx="5" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+                <rect x="5" y="5" width="6" height="6" rx="1.5" fill="rgba(255,255,255,0.2)"/>
+                <rect x="13" y="5" width="6" height="6" rx="1.5" fill="rgba(255,255,255,0.15)"/>
+                <rect x="5" y="13" width="6" height="6" rx="1.5" fill="rgba(255,255,255,0.15)"/>
+                <rect x="13" y="13" width="6" height="6" rx="1.5" fill="rgba(255,255,255,0.1)"/>
+            </svg>`;
+        }
+        if (c === 'files') {
+            // Document icon
+            return `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M6 2C4.9 2 4 2.9 4 4v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6H6z" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+                <path d="M14 2v6h6" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+                <line x1="8" y1="13" x2="16" y2="13" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+                <line x1="8" y1="16" x2="14" y2="16" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+            </svg>`;
+        }
+        if (c === 'system') {
+            // Gear icon
+            return `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" fill="rgba(255,255,255,0.1)" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
+                <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+            </svg>`;
+        }
+        // Generic fallback
+        return `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="9" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+            <circle cx="12" cy="12" r="3" fill="rgba(255,255,255,0.15)"/>
+        </svg>`;
     }
 
     // --- Toast (left side of footer) ---
