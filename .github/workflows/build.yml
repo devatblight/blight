@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [blacksmith-2vcpu-windows-2022, blacksmith-2vcpu-ubuntu-22.04]
+        os: [windows-latest, ubuntu-22.04]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
