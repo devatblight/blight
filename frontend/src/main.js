@@ -5,6 +5,7 @@ class Blight {
     constructor() {
         this.selectedIndex = 0;
         this.results = [];
+        this.searchSeq = 0;
         this.debounceTimer = null;
         this.toastTimer = null;
         this.toastHovered = false;
@@ -147,14 +148,20 @@ class Blight {
         clearTimeout(this.debounceTimer);
         this.debounceTimer = setTimeout(async () => {
             const query = this.searchInput.value.trim();
-            this.results = await Search(query);
+            const seq = ++this.searchSeq;
+            const results = await Search(query);
+            if (seq !== this.searchSeq) return; // ignore stale responses
+            this.results = results;
             this.selectedIndex = 0;
             this.renderResults();
         }, 120);
     }
 
     async loadDefaultResults() {
-        this.results = await Search('');
+        const seq = ++this.searchSeq;
+        const results = await Search('');
+        if (seq !== this.searchSeq) return;
+        this.results = results;
         this.selectedIndex = 0;
         this.renderResults();
     }
