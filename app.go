@@ -19,9 +19,18 @@ import (
 	"blight/internal/hotkey"
 	"blight/internal/search"
 	"blight/internal/tray"
+	"blight/internal/updater"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+type UpdateInfo struct {
+	Available bool   `json:"available"`
+	Version   string `json:"version"`
+	URL       string `json:"url"`
+	Notes     string `json:"notes"`
+	Error     string `json:"error,omitempty"`
+}
 
 type SearchResult struct {
 	ID       string `json:"id"`
@@ -53,23 +62,27 @@ type App struct {
 	hotkey    *hotkey.HotkeyManager
 	tray      *tray.TrayIcon
 	visible   atomic.Bool
+	version   string
 }
 
-func NewApp() *App {
-	return &App{}
+func NewApp(version string) *App {
+	return &App{
+		version: version,
+	}
 }
 
 func (a *App) startup(ctx context.Context) {
 	log := debug.Get()
 	defer log.RecoverPanic("app.startup")
 
-	log.Info("app.startup called")
+	log.Info("app.startup called", map[string]interface{}{"version": a.version})
 	a.ctx = ctx
 	a.visible.Store(true)
 	a.loadConfig()
 	log.Debug("config loaded", map[string]interface{}{"firstRun": a.config.FirstRun, "hotkey": a.config.Hotkey})
 
 	a.scanner = apps.NewScanner()
+	// ... rest of startup
 	log.Info("app scanner initialized", map[string]interface{}{"appCount": len(a.scanner.Apps())})
 
 	a.usage = search.NewUsageTracker()
@@ -112,6 +125,61 @@ func (a *App) shutdown(ctx context.Context) {
 		a.tray.Stop()
 	}
 	log.Info("cleanup complete")
+}
+
+func (a *App) CheckForUpdates() UpdateInfo {
+	u := updater.New("devatblight/blight")
+	log := debug.Get()
+
+	log.Info("checking for updates", map[string]interface{}{"current": a.version})
+
+	rel, found, err := u.CheckForUpdates(a.version)
+	if err != nil {
+		log.Error("update check failed", map[string]interface{}{"error": err.Error()})
+		return UpdateInfo{Error: err.Error()}
+	}
+
+	if !found {
+		log.Info("no updates found")
+		return UpdateInfo{Available: false}
+	}
+
+	log.Info("update available", map[string]interface{}{"version": rel.Version.String()})
+
+	return UpdateInfo{
+		Available: true,
+		Version:   rel.Version.String(),
+		URL:       rel.AssetURL,
+		Notes:     rel.ReleaseNotes,
+	}
+}
+
+func (a *App) InstallUpdate() string {
+	log := debug.Get()
+	u := updater.New("devatblight/blight")
+
+	// We need the release object. Re-detecting is safest/easiest if we don't cache.
+	rel, found, err := u.CheckForUpdates(a.version)
+	if err != nil {
+		return "Check failed: " + err.Error()
+	}
+	if !found {
+		return "No update found"
+	}
+
+	log.Info("installing update", map[string]interface{}{"version": rel.Version.String()})
+	if err := u.ApplyUpdate(rel); err != nil {
+		log.Error("update failed", map[string]interface{}{"error": err.Error()})
+		return "Update failed: " + err.Error()
+	}
+
+	log.Info("update applied, restarting...")
+
+	return "success"
+}
+
+func (a *App) GetVersion() string {
+	return a.version
 }
 
 func (a *App) ToggleWindow() {

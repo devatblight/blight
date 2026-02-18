@@ -3,8 +3,11 @@ package main
 import (
 	"embed"
 	"fmt"
+	"os"
+	"os/exec"
 
 	"blight/internal/debug"
+	"blight/internal/installer"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -15,13 +18,35 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+var Version = "0.0.1"
+
 func main() {
-	// Initialize debug logger FIRST — before anything else
 	log := debug.Init()
 	defer log.Close()
 	defer log.RecoverPanic("main")
 
-	log.Info("blight starting up")
+	log.Info("blight starting up", map[string]interface{}{"version": Version})
+
+	if !log.Enabled() {
+		installed, err := installer.IsInstalled()
+		if err != nil {
+			log.Error("failed to check install status", map[string]interface{}{"error": err.Error()})
+		} else if !installed {
+			log.Info("not installed, attempting to install...")
+			newPath, err := installer.Install()
+			if err != nil {
+				log.Error("installation failed", map[string]interface{}{"error": err.Error()})
+			} else {
+				log.Info("installed successfully, relaunching", map[string]interface{}{"path": newPath})
+				cmd := exec.Command(newPath)
+				if err := cmd.Start(); err != nil {
+					log.Error("failed to launch installed app", map[string]interface{}{"error": err.Error()})
+				} else {
+					os.Exit(0)
+				}
+			}
+		}
+	}
 
 	// Start debug console server (only if not production)
 	if log.Enabled() {
@@ -34,7 +59,7 @@ func main() {
 		}
 	}
 
-	app := NewApp()
+	app := NewApp(Version)
 	log.Info("app instance created")
 
 	err := wails.Run(&options.App{

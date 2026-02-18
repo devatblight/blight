@@ -3,6 +3,8 @@
 import {main} from '../models';
 import {files} from '../models';
 
+export function CheckForUpdates():Promise<main.UpdateInfo>;
+
 export function ClearIndex():Promise<void>;
 
 export function CompleteOnboarding(arg1:string):Promise<void>;
@@ -17,7 +19,11 @@ export function GetIcon(arg1:string):Promise<string>;
 
 export function GetIndexStatus():Promise<files.IndexStatus>;
 
+export function GetVersion():Promise<string>;
+
 export function HideWindow():Promise<void>;
+
+export function InstallUpdate():Promise<string>;
 
 export function IsFirstRun():Promise<boolean>;
 

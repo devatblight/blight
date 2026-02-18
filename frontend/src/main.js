@@ -1,4 +1,4 @@
-import { IsFirstRun, CompleteOnboarding, Search, Execute, HideWindow, GetContextActions, ExecuteContextAction } from '../wailsjs/go/main/App';
+import { IsFirstRun, CompleteOnboarding, Search, Execute, HideWindow, GetContextActions, ExecuteContextAction, CheckForUpdates, InstallUpdate } from '../wailsjs/go/main/App';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 
 class Blight {
@@ -32,11 +32,55 @@ class Blight {
     }
 
     async init() {
+        this.checkForUpdates();
         const firstRun = await IsFirstRun();
         if (firstRun) {
             this.showSplash();
         } else {
             this.showLauncher();
+        }
+    }
+
+    async checkForUpdates() {
+        try {
+            console.log("Checking for updates...");
+            const update = await CheckForUpdates();
+            if (update && update.available) {
+                console.log("Update available:", update.version);
+                this.showUpdateUI(update);
+            } else {
+                console.log("No updates found.");
+            }
+        } catch (e) {
+            console.error("Failed to check for updates:", e);
+        }
+    }
+
+    showUpdateUI(update) {
+        // Create update badge
+        const badge = document.createElement('div');
+        badge.className = 'notification-indicator update-badge';
+        badge.innerHTML = `
+            <span class="notif-icon" style="color: #4ade80;">⬇</span>
+            <span class="notif-text" style="color: #4ade80;">Update ${update.version}</span>
+        `;
+        badge.style.cursor = 'pointer';
+        badge.title = `Click to install update ${update.version}`;
+        
+        badge.onclick = () => this.installUpdate(update);
+
+        if (this.notifIndicator && this.notifIndicator.parentNode) {
+            this.notifIndicator.parentNode.insertBefore(badge, this.notifIndicator);
+        }
+    }
+
+    async installUpdate(update) {
+        if (!confirm(`Install update ${update.version}? The app will restart.`)) return;
+        
+        this.showToast("Downloading update...", "Please wait");
+        const res = await InstallUpdate();
+        if (res !== "success") {
+            this.showToast("Update failed", res);
         }
     }
 
