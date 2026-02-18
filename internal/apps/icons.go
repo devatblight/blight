@@ -154,7 +154,7 @@ func extractIconHQ(path string) string {
 	}
 	iconIndex := sfi.IIcon
 
-	// Get the extra-large (48x48) system image list
+	// Get the jumbo (256x256) image icon
 	var imageList uintptr
 	hr, _, _ := procSHGetImageList.Call(
 		SHIL_JUMBO,
@@ -168,7 +168,7 @@ func extractIconHQ(path string) string {
 	// IImageList::GetIcon is the 9th method in the vtable (index 8, 0-based)
 	// https://learn.microsoft.com/en-us/windows/win32/api/commoncontrols/nf-commoncontrols-iimagelist-geticon
 	vtable := *(*[20]uintptr)(unsafe.Pointer(*(*uintptr)(unsafe.Pointer(imageList))))
-	getIconFn := vtable[9] // GetIcon is at index 9
+	getIconFn := vtable[10] // GetIcon is at index 10 (11th method)
 
 	var hIcon uintptr
 	// ILD_TRANSPARENT = 1
