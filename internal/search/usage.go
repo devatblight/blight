@@ -20,7 +20,7 @@ func NewUsageTracker() *UsageTracker {
 		path:   filepath.Join(home, ".blight", "usage.json"),
 	}
 	tracker.load()
-	return t
+	return tracker
 }
 
 func (t *UsageTracker) Record(id string) {
