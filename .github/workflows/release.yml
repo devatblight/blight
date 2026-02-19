@@ -140,7 +140,7 @@ jobs:
           tag_name: ${{ needs.check-version.outputs.tag }}
           name: "blight ${{ needs.check-version.outputs.tag }} (${{ needs.check-version.outputs.channel }})"
           prerelease: ${{ needs.check-version.outputs.prerelease }}
-          generate_release_notes: false
+          generate_release_notes: true
           body: |
             # blight ${{ needs.check-version.outputs.tag }}
 
