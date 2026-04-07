@@ -15,6 +15,9 @@ class Blight {
         this.toastHovered = false;
         this.contextTarget = null;
 
+        // Icon cache: path → base64 data URI (persists across re-renders)
+        this.iconCache = new Map();
+
         // Notification history
         this.notifications = [];
 
@@ -203,6 +206,13 @@ class Blight {
             settingsBtn.addEventListener('click', () => this.openSettings());
         }
 
+        // Click outside the window → hide
+        window.addEventListener('blur', () => {
+            if (this.settingsPanelEl.classList.contains('hidden')) {
+                HideWindow();
+            }
+        });
+
         // Listen for openSettings event from tray
         EventsOn('openSettings', () => this.openSettings());
     }
@@ -247,6 +257,11 @@ class Blight {
             return;
         }
 
+        if (result.id.startsWith('web-search:')) {
+            await Execute(result.id);
+            return; // browser opens, no toast needed
+        }
+
         const response = await Execute(result.id);
         if (response === 'copied') {
             this.showToast('Copied to clipboard', result.title);
@@ -283,11 +298,13 @@ class Blight {
 
             const selected = index === this.selectedIndex ? 'selected' : '';
             let iconHtml;
-            if (result.icon && result.icon.startsWith('data:')) {
-                iconHtml = `<div class="result-icon"><img src="${result.icon}" alt=""/></div>`;
+            const cachedIcon = result.path ? this.iconCache.get(result.path) : null;
+            const iconSrc = (result.icon && result.icon.startsWith('data:')) ? result.icon : cachedIcon;
+            if (iconSrc) {
+                iconHtml = `<div class="result-icon"><img src="${iconSrc}" alt=""/></div>`;
             } else {
                 const fallbackSvg = this.getFallbackIcon(result.category);
-                iconHtml = `<div class="result-icon result-icon-fallback" data-icon-pending="${index}">${fallbackSvg}</div>`;
+                iconHtml = `<div class="result-icon result-icon-fallback" data-icon-index="${index}">${fallbackSvg}</div>`;
             }
 
             html += `
@@ -324,17 +341,17 @@ class Blight {
             });
         });
 
-        // Async icon loading: load icons for results that have a path but no icon
+        // Async icon loading: only fetch icons not yet in cache
         this.results.forEach((result, index) => {
-            if (result.path && (!result.icon || !result.icon.startsWith('data:'))) {
-                GetIcon(result.path).then(icon => {
-                    if (!icon) return;
-                    const pending = this.resultsContainer.querySelector(`[data-icon-pending="${index}"]`);
-                    if (pending) {
-                        pending.outerHTML = `<div class="result-icon"><img src="${icon}" alt=""/></div>`;
-                    }
-                }).catch(() => {});
-            }
+            if (!result.path || this.iconCache.has(result.path)) return;
+            if (result.icon && result.icon.startsWith('data:')) return;
+            GetIcon(result.path).then(icon => {
+                if (!icon) return;
+                this.iconCache.set(result.path, icon);
+                // Update the placeholder if it's still rendered for this result index
+                const el = this.resultsContainer.querySelector(`[data-icon-index="${index}"]`);
+                if (el) el.outerHTML = `<div class="result-icon"><img src="${icon}" alt=""/></div>`;
+            }).catch(() => {});
         });
     }
 
@@ -543,6 +560,16 @@ class Blight {
                 <path d="M14 2v6h6" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
                 <line x1="8" y1="13" x2="16" y2="13" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
                 <line x1="8" y1="16" x2="14" y2="16" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+            </svg>`;
+        }
+        if (c === 'web') {
+            return `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="12" cy="12" r="9" stroke="rgba(255,255,255,0.15)" stroke-width="1" fill="rgba(255,255,255,0.05)"/>
+                <path d="M12 3c0 0-3 3.5-3 9s3 9 3 9" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+                <path d="M12 3c0 0 3 3.5 3 9s-3 9-3 9" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+                <line x1="3" y1="12" x2="21" y2="12" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+                <circle cx="17" cy="17" r="4" fill="#1e1e1e" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+                <line x1="20" y1="20" x2="22" y2="22" stroke="rgba(255,255,255,0.2)" stroke-width="1.5" stroke-linecap="round"/>
             </svg>`;
         }
         if (c === 'system') {

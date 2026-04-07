@@ -316,7 +316,10 @@ body {
     position: relative;
     display: flex;
     align-items: center;
+    flex: 1;
+    min-width: 0;
     overflow: hidden;
+    max-width: 260px;
 }
 
 .footer-brand {
@@ -364,14 +367,16 @@ body {
     white-space: nowrap;
     cursor: default;
     transition: transform var(--transition-smooth), opacity var(--transition-smooth);
-    max-width: 200px;
+    max-width: 240px;
     overflow: hidden;
     text-overflow: ellipsis;
+    pointer-events: none;
 }
 
 .toast.visible {
     transform: translateX(0) translateY(-50%);
     opacity: 1;
+    pointer-events: auto;
 }
 
 .toast:hover {

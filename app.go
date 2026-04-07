@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -192,6 +193,7 @@ func (a *App) InstallUpdate() string {
 	go func() {
 		time.Sleep(300 * time.Millisecond)
 		cmd := exec.Command(exe)
+		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x00000008}
 		cmd.Start()
 		runtime.Quit(a.ctx)
 	}()
@@ -333,9 +335,24 @@ func (a *App) Search(query string) []SearchResult {
 
 	if len(results) == 0 {
 		return []SearchResult{
-			{ID: "no-results", Title: "No results found", Subtitle: query, Icon: "", Category: "General"},
+			{
+				ID:       "web-search:" + query,
+				Title:    "Search the web for \"" + query + "\"",
+				Subtitle: "Opens in your default browser",
+				Icon:     "",
+				Category: "Web",
+			},
 		}
 	}
+
+	// Always append a web search option at the bottom for non-empty queries
+	results = append(results, SearchResult{
+		ID:       "web-search:" + query,
+		Title:    "Search the web for \"" + query + "\"",
+		Subtitle: "Opens in your default browser",
+		Icon:     "",
+		Category: "Web",
+	})
 
 	log.Debug("search", map[string]interface{}{"query": query, "results": len(results)})
 	return results
@@ -343,6 +360,16 @@ func (a *App) Search(query string) []SearchResult {
 
 func (a *App) Execute(id string) string {
 	debug.Get().Info("execute", map[string]interface{}{"id": id})
+
+	if strings.HasPrefix(id, "web-search:") {
+		query := strings.TrimPrefix(id, "web-search:")
+		searchURL := "https://www.google.com/search?q=" + url.QueryEscape(query)
+		runtime.BrowserOpenURL(a.ctx, searchURL)
+		runtime.WindowHide(a.ctx)
+		a.visible.Store(false)
+		return "ok"
+	}
+
 	if id == "calc-result" {
 		runtime.ClipboardSetText(a.ctx, "")
 		return "copied"
@@ -368,16 +395,15 @@ func (a *App) Execute(id string) string {
 
 	if strings.HasPrefix(id, "file-open:") {
 		filePath := strings.TrimPrefix(id, "file-open:")
-		cmd := exec.Command("cmd", "/c", "start", "", filePath)
-		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-		cmd.Start()
+		shellOpen(filePath)
 		runtime.WindowHide(a.ctx)
+		a.visible.Store(false)
 		return "ok"
 	}
 
 	if strings.HasPrefix(id, "file-reveal:") {
 		filePath := strings.TrimPrefix(id, "file-reveal:")
-		exec.Command("explorer", "/select,", filePath).Start()
+		explorerSelect(filePath)
 		return "ok"
 	}
 
@@ -413,7 +439,7 @@ func (a *App) GetContextActions(id string) []ContextAction {
 		return []ContextAction{
 			{ID: "run", Label: "Run", Icon: "▶"},
 		}
-	case id == "calc-result" || id == "no-results":
+	case id == "calc-result" || id == "no-results" || strings.HasPrefix(id, "web-search:"):
 		return []ContextAction{}
 	default:
 		// App
@@ -432,13 +458,12 @@ func (a *App) ExecuteContextAction(resultID string, actionID string) string {
 		filePath := strings.TrimPrefix(resultID, "file-open:")
 		switch actionID {
 		case "open":
-			cmd := exec.Command("cmd", "/c", "start", "", filePath)
-			cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-			cmd.Start()
+			shellOpen(filePath)
 			runtime.WindowHide(a.ctx)
+			a.visible.Store(false)
 			return "ok"
 		case "explorer":
-			exec.Command("explorer", "/select,", filePath).Start()
+			explorerSelect(filePath)
 			return "ok"
 		case "copy-path":
 			runtime.ClipboardSetText(a.ctx, filePath)
@@ -516,7 +541,7 @@ func (a *App) ExecuteContextAction(resultID string, actionID string) string {
 		return "ok"
 
 	case "explorer":
-		exec.Command("explorer", "/select,", target.Path).Start()
+		explorerSelect(target.Path)
 		return "ok"
 
 	case "copy-path":
@@ -698,7 +723,23 @@ func prettifyPath(path string) string {
 	return path
 }
 
-var procShellExecute = syscall.NewLazyDLL("shell32.dll").NewProc("ShellExecuteW")
+var (
+	procShellExecute = syscall.NewLazyDLL("shell32.dll").NewProc("ShellExecuteW")
+)
+
+// shellOpen opens a file with its default handler via ShellExecuteW — no cmd.exe flash.
+func shellOpen(path string) {
+	verb, _ := syscall.UTF16PtrFromString("open")
+	file, _ := syscall.UTF16PtrFromString(path)
+	procShellExecute.Call(0, uintptr(unsafe.Pointer(verb)), uintptr(unsafe.Pointer(file)), 0, 0, 1)
+}
+
+// explorerSelect opens Windows Explorer with the file selected, without spawning a console.
+func explorerSelect(path string) {
+	arg, _ := syscall.UTF16PtrFromString("/select," + path)
+	explorer, _ := syscall.UTF16PtrFromString("explorer.exe")
+	procShellExecute.Call(0, 0, uintptr(unsafe.Pointer(explorer)), uintptr(unsafe.Pointer(arg)), 0, 1)
+}
 
 func runAsAdmin(path string) error {
 	verb, _ := syscall.UTF16PtrFromString("runas")
