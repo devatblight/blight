@@ -83,6 +83,9 @@ jobs:
         working-directory: frontend
         run: pnpm install
 
+      - name: Install NSIS
+        run: choco install nsis -y
+
       - name: Build installer
         run: wails build -nsis -ldflags "-X main.Version=${{ needs.check-version.outputs.version }}"
 
