@@ -108,15 +108,16 @@ func runSettingsWindow(log *debug.Logger) {
 	app := NewSettingsApp(Version)
 
 	err := wails.Run(&options.App{
-		Title:         "blight Settings",
-		Width:         680,
-		Height:        560,
-		DisableResize: false,
-		MinWidth:      480,
-		MinHeight:     400,
-		Frameless:     false,
-		AlwaysOnTop:   false,
-		StartHidden:   false,
+		Title:            "blight Settings",
+		Width:            680,
+		Height:           560,
+		DisableResize:    false,
+		MinWidth:         480,
+		MinHeight:        400,
+		Frameless:        true,
+		AlwaysOnTop:      false,
+		StartHidden:      false,
+		BackgroundColour: &options.RGBA{R: 0, G: 0, B: 0, A: 0},
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
@@ -126,9 +127,10 @@ func runSettingsWindow(log *debug.Logger) {
 			app,
 		},
 		Windows: &windows.Options{
-			WebviewIsTransparent: false,
-			WindowIsTranslucent:  false,
-			Theme:                windows.Dark,
+			WebviewIsTransparent:              true,
+			WindowIsTranslucent:               true,
+			DisableFramelessWindowDecorations: true,
+			Theme:                             windows.Dark,
 		},
 	})
 

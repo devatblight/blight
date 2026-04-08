@@ -120,9 +120,9 @@ func (u *Updater) ApplyUpdate(release *Release) error {
 		return fmt.Errorf("download write failed: %w", copyErr)
 	}
 
-	// Run the NSIS installer silently; /S = silent, no UI
-	cmd := exec.Command(dest, "/S")
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	// Run the NSIS installer with its UI so the user can see progress
+	cmd := exec.Command(dest)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: false}
 	return cmd.Start()
 }
 

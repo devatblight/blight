@@ -221,9 +221,8 @@ func (a *App) GetVersion() string {
 	return a.version
 }
 
-// IsSettingsMode is always false for the main launcher process.
-// The frontend uses this to distinguish the settings-only window.
-func (a *App) IsSettingsMode() bool { return false }
+// IsSettingsMode returns true when running as the --settings child process.
+func (a *App) IsSettingsMode() bool { return a.settingsMode }
 
 // OpenSettingsWindow spawns blight.exe --settings as a separate OS window.
 func (a *App) OpenSettingsWindow() {
@@ -247,18 +246,20 @@ func (a *App) ToggleWindow() {
 	} else {
 		// Reload config so changes saved in the settings window take effect
 		a.loadConfig()
-		runtime.EventsEmit(a.ctx, "windowShown")
 		runtime.WindowShow(a.ctx)
 		runtime.WindowSetAlwaysOnTop(a.ctx, true)
+		runtime.WindowFocus(a.ctx)
+		runtime.EventsEmit(a.ctx, "windowShown")
 		a.visible.Store(true)
 	}
 }
 
 func (a *App) ShowWindow() {
 	a.loadConfig()
-	runtime.EventsEmit(a.ctx, "windowShown")
 	runtime.WindowShow(a.ctx)
 	runtime.WindowSetAlwaysOnTop(a.ctx, true)
+	runtime.WindowFocus(a.ctx)
+	runtime.EventsEmit(a.ctx, "windowShown")
 	a.visible.Store(true)
 }
 

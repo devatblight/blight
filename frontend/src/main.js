@@ -1,7 +1,8 @@
 import {
-    IsFirstRun, CompleteOnboarding, Search, Execute, HideWindow,
+    IsFirstRun, IsSettingsMode, CompleteOnboarding, Search, Execute, HideWindow,
     GetContextActions, ExecuteContextAction, CheckForUpdates, InstallUpdate,
-    GetIcon, GetConfig, SaveSettings, GetVersion, ReindexFiles, ClearIndex
+    GetIcon, GetConfig, SaveSettings, GetVersion, ReindexFiles, ClearIndex,
+    CloseSettings
 } from '../wailsjs/go/main/App';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 
@@ -25,6 +26,7 @@ class Blight {
         this.contextMenuSelectedIndex = -1;
         this.contextMenuActions = [];
         this.currentQuery = '';
+        this.settingsMode = false;
 
         // Icon cache: path → base64 data URI (persists across re-renders)
         this.iconCache = new Map();
@@ -51,6 +53,15 @@ class Blight {
     }
 
     async init() {
+        const settingsMode = await IsSettingsMode();
+        if (settingsMode) {
+            this.settingsMode = true;
+            document.body.classList.add('settings-only');
+            // Bind settings handlers without showing the launcher UI
+            this.bindSettings();
+            this.openSettings();
+            return;
+        }
         this.checkForUpdates();
         const firstRun = await IsFirstRun();
         if (firstRun) {
@@ -230,14 +241,28 @@ class Blight {
             settingsBtn.addEventListener('click', () => this.openSettings());
         }
 
-        // Click outside the window → hide
-        this.lastShownAt = 0;
-        EventsOn('windowShown', () => { this.lastShownAt = Date.now(); });
+        // Window show/hide lifecycle
+        this.lastShownAt = Date.now(); // treat initial render as "just shown"
+        this.isHiding = false;
+        EventsOn('windowShown', () => {
+            this.lastShownAt = Date.now();
+            this.isHiding = false;
+            // Reset to clean state on every show
+            this.searchInput.value = '';
+            this.currentQuery = '';
+            this.loadDefaultResults();
+            // Focus must be deferred slightly so the window is fully visible
+            setTimeout(() => {
+                this.searchInput.focus();
+                this.searchInput.select();
+            }, 30);
+        });
         window.addEventListener('blur', () => {
-            if (Date.now() - this.lastShownAt < 800) return;
-            if (this.settingsPanelEl.classList.contains('hidden')) {
-                HideWindow();
-            }
+            if (this.isHiding) return;
+            if (Date.now() - this.lastShownAt < 600) return;
+            if (!this.settingsPanelEl.classList.contains('hidden')) return;
+            this.isHiding = true;
+            HideWindow();
         });
 
         // Listen for openSettings event from tray
@@ -277,10 +302,16 @@ class Blight {
 
     moveSelection(delta) {
         if (this.results.length === 0) return;
+        const items = this.resultsContainer.querySelectorAll('.result-item');
+        if (items.length === 0) return;
+        items[this.selectedIndex]?.classList.remove('selected');
         this.selectedIndex = (this.selectedIndex + delta + this.results.length) % this.results.length;
-        this.renderResults();
-        const selected = this.resultsContainer.querySelector('.result-item.selected');
-        if (selected) selected.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        const next = items[this.selectedIndex];
+        if (next) {
+            next.classList.add('selected');
+            next.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+        this.updateFooterHints(this.results[this.selectedIndex] || null);
     }
 
     async executeSelected() {
@@ -409,19 +440,23 @@ class Blight {
         this.resultsContainer.querySelectorAll('.result-item').forEach(item => {
             item.addEventListener('click', () => {
                 this.selectedIndex = parseInt(item.dataset.index);
-                this.renderResults();
                 this.executeSelected();
             });
 
             item.addEventListener('mouseenter', () => {
+                const prev = this.resultsContainer.querySelector('.result-item.selected');
+                if (prev && prev !== item) prev.classList.remove('selected');
+                item.classList.add('selected');
                 this.selectedIndex = parseInt(item.dataset.index);
-                this.renderResults();
+                this.updateFooterHints(this.results[this.selectedIndex] || null);
             });
 
             item.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
+                const prev = this.resultsContainer.querySelector('.result-item.selected');
+                if (prev && prev !== item) prev.classList.remove('selected');
+                item.classList.add('selected');
                 this.selectedIndex = parseInt(item.dataset.index);
-                this.renderResults();
                 this.showContextMenu(e.clientX, e.clientY, item.dataset.id, item.querySelector('.result-title')?.textContent || '', false);
             });
         });
@@ -683,6 +718,10 @@ class Blight {
     }
 
     closeSettings() {
+        if (this.settingsMode) {
+            CloseSettings();
+            return;
+        }
         this.settingsPanelEl.classList.add('hidden');
         this.searchInput.focus();
     }
@@ -698,6 +737,10 @@ class Blight {
                 const maxClipboard = parseInt(document.getElementById('settings-clipboard-size')?.value || '50', 10);
                 try {
                     await SaveSettings(hotkey, maxClipboard);
+                    if (this.settingsMode) {
+                        CloseSettings();
+                        return;
+                    }
                     this.showToast('Settings saved', 'Changes applied');
                     this.closeSettings();
                 } catch (e) {
@@ -777,7 +820,7 @@ class Blight {
     getFallbackIcon(category) {
         const c = (category || '').toLowerCase();
         if (c === 'applications' || c === 'recent' || c === 'suggested') {
-            return `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            return `<svg width="100%" height="100%" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <rect x="2" y="2" width="20" height="20" rx="5" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
                 <rect x="5" y="5" width="6" height="6" rx="1.5" fill="rgba(255,255,255,0.2)"/>
                 <rect x="13" y="5" width="6" height="6" rx="1.5" fill="rgba(255,255,255,0.15)"/>
@@ -786,7 +829,7 @@ class Blight {
             </svg>`;
         }
         if (c === 'files') {
-            return `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            return `<svg width="100%" height="100%" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M6 2C4.9 2 4 2.9 4 4v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6H6z" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
                 <path d="M14 2v6h6" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
                 <line x1="8" y1="13" x2="16" y2="13" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
@@ -794,7 +837,7 @@ class Blight {
             </svg>`;
         }
         if (c === 'web') {
-            return `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            return `<svg width="100%" height="100%" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <circle cx="12" cy="12" r="9" stroke="rgba(255,255,255,0.15)" stroke-width="1" fill="rgba(255,255,255,0.05)"/>
                 <path d="M12 3c0 0-3 3.5-3 9s3 9 3 9" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
                 <path d="M12 3c0 0 3 3.5 3 9s-3 9-3 9" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
@@ -804,13 +847,13 @@ class Blight {
             </svg>`;
         }
         if (c === 'system') {
-            return `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            return `<svg width="100%" height="100%" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" fill="rgba(255,255,255,0.1)" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
                 <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
             </svg>`;
         }
         if (c === 'calculator') {
-            return `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            return `<svg width="100%" height="100%" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <rect x="4" y="2" width="16" height="20" rx="3" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
                 <rect x="7" y="5" width="10" height="4" rx="1" fill="rgba(255,255,255,0.1)"/>
                 <rect x="7" y="12" width="3" height="2" rx="0.5" fill="rgba(255,255,255,0.15)"/>
@@ -822,14 +865,14 @@ class Blight {
             </svg>`;
         }
         if (c === 'clipboard') {
-            return `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            return `<svg width="100%" height="100%" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2" stroke="rgba(255,255,255,0.2)" stroke-width="1" fill="rgba(255,255,255,0.05)"/>
                 <rect x="8" y="2" width="8" height="4" rx="1.5" stroke="rgba(255,255,255,0.2)" stroke-width="1" fill="rgba(255,255,255,0.08)"/>
                 <line x1="8" y1="11" x2="16" y2="11" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
                 <line x1="8" y1="14" x2="14" y2="14" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
             </svg>`;
         }
-        return `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        return `<svg width="100%" height="100%" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <circle cx="12" cy="12" r="9" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
             <circle cx="12" cy="12" r="3" fill="rgba(255,255,255,0.15)"/>
         </svg>`;

@@ -6,7 +6,9 @@
       "Bash(node --input-type=module)",
       "Bash(node -e ':*)",
       "Bash(node:*)",
-      "Bash(GOOS=windows GOARCH=amd64 go build:*)"
+      "Bash(GOOS=windows GOARCH=amd64 go build:*)",
+      "Bash(xargs wc:*)",
+      "Bash(go build:*)"
     ]
   }
 }
