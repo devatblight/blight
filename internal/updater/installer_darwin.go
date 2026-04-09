@@ -1,4 +1,4 @@
-//go:build !windows
+//go:build darwin
 
 package updater
 
@@ -9,11 +9,7 @@ import (
 
 func isInstallerAsset(name string) bool {
 	return strings.HasSuffix(name, ".dmg") ||
-		strings.HasSuffix(name, ".pkg") ||
-		strings.HasSuffix(name, ".appimage") ||
-		strings.HasSuffix(name, ".deb") ||
-		strings.HasSuffix(name, ".rpm") ||
-		strings.HasSuffix(name, ".tar.gz")
+		strings.HasSuffix(name, ".pkg")
 }
 
 func installerTempName() string {
