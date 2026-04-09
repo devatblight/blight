@@ -115,15 +115,17 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         shell: bash
         run: |
-          wails build -ldflags "-X main.Version=${{ needs.check-version.outputs.version }}"
-          tar -C build/bin -czf blight-linux-amd64.tar.gz blight
+          wails build -platform windows/amd64 -s -skipbindings -ldflags "-X main.Version=${{ needs.check-version.outputs.version }}"
+          tar -C build/bin -czf blight-linux-amd64.tar.gz blight.exe
 
       - name: Build macOS installer
         if: matrix.os == 'macos-latest'
         shell: bash
         run: |
-          wails build -ldflags "-X main.Version=${{ needs.check-version.outputs.version }}"
-          hdiutil create -volname "blight" -srcfolder "build/bin/blight.app" -ov -format UDZO blight-macos-amd64.dmg
+          wails build -platform windows/amd64 -s -skipbindings -ldflags "-X main.Version=${{ needs.check-version.outputs.version }}"
+          mkdir -p dist-macos
+          cp build/bin/blight.exe dist-macos/
+          hdiutil create -volname "blight" -srcfolder "dist-macos" -ov -format UDZO blight-macos-amd64.dmg
 
       - name: Upload installer
         uses: actions/upload-artifact@v4

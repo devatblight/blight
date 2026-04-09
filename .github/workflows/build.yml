@@ -51,4 +51,4 @@ jobs:
 
       - name: Build app package (dry run — no upload)
         if: matrix.os != 'windows-latest'
-        run: wails build -ldflags "-X main.Version=0.0.0-ci"
+        run: wails build -platform windows/amd64 -s -skipbindings -ldflags "-X main.Version=0.0.0-ci"
