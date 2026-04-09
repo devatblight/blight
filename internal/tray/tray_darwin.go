@@ -2,17 +2,15 @@
 
 package tray
 
-import (
-	"sync/atomic"
-
-	"github.com/getlantern/systray"
-)
-
+// TrayIcon is a no-op on macOS. getlantern/systray defines its own
+// AppDelegate Objective-C class, which conflicts with Wails' AppDelegate
+// at link time. A native macOS status-bar icon would require a CGO
+// implementation that hooks into the existing Wails/Cocoa run loop instead
+// of creating a second one.
 type TrayIcon struct {
 	onShow     func()
 	onSettings func()
 	onQuit     func()
-	started    atomic.Bool
 }
 
 func New(onShow, onSettings, onQuit func()) *TrayIcon {
@@ -23,46 +21,5 @@ func New(onShow, onSettings, onQuit func()) *TrayIcon {
 	}
 }
 
-func (t *TrayIcon) Start() {
-	if t.started.Swap(true) {
-		return
-	}
-	go systray.Run(func() {
-		systray.SetTitle("blight")
-		systray.SetTooltip("blight")
-
-		showItem := systray.AddMenuItem("Show blight", "Show blight window")
-		settingsItem := systray.AddMenuItem("Settings", "Open settings")
-		systray.AddSeparator()
-		quitItem := systray.AddMenuItem("Quit", "Quit blight")
-
-		go func() {
-			for {
-				select {
-				case <-showItem.ClickedCh:
-					if t.onShow != nil {
-						t.onShow()
-					}
-				case <-settingsItem.ClickedCh:
-					if t.onSettings != nil {
-						t.onSettings()
-					}
-				case <-quitItem.ClickedCh:
-					if t.onQuit != nil {
-						t.onQuit()
-					}
-					return
-				}
-			}
-		}()
-	}, func() {
-		t.started.Store(false)
-	})
-}
-
-func (t *TrayIcon) Stop() {
-	if !t.started.Load() {
-		return
-	}
-	systray.Quit()
-}
+func (t *TrayIcon) Start() {}
+func (t *TrayIcon) Stop()  {}
