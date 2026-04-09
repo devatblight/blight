@@ -7,7 +7,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"blight/internal/search"
@@ -256,11 +255,4 @@ func estimateCount(dir string) int {
 func dirExists(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.IsDir()
-}
-
-// hiddenCmd sets up a command to run with a hidden window on Windows.
-func HiddenCmd(name string, args ...string) *syscall.SysProcAttr {
-	return &syscall.SysProcAttr{
-		HideWindow: true,
-	}
 }
