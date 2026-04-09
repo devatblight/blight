@@ -2,7 +2,6 @@ package commands
 
 import (
 	"os/exec"
-	"syscall"
 )
 
 type SystemCommand struct {
@@ -281,19 +280,19 @@ func ExecuteSystemCommand(id string) error {
 // startMS opens a ms-settings: URI via cmd start.
 func startMS(uri string) error {
 	cmd := exec.Command("cmd.exe", "/c", "start", "", uri)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	cmd.SysProcAttr = hiddenSysProcAttr()
 	return cmd.Start()
 }
 
 // startHidden starts a process without a visible console window.
 func startHidden(name string, args ...string) error {
 	cmd := exec.Command(name, args...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	cmd.SysProcAttr = hiddenSysProcAttr()
 	return cmd.Start()
 }
 
 func runHidden(name string, args ...string) error {
 	cmd := exec.Command(name, args...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	cmd.SysProcAttr = hiddenSysProcAttr()
 	return cmd.Run()
 }
