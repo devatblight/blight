@@ -922,7 +922,7 @@ class Blight {
         const saveBtn = document.getElementById('settings-save');
         if (saveBtn) {
             saveBtn.addEventListener('click', async () => {
-                const cfg: main.BlightConfig = {
+                const cfg = {
                     firstRun: false,
                     hotkey: document.getElementById('settings-hotkey-display')?.textContent || 'Alt+Space',
                     maxClipboard: parseInt(inputEl('settings-clipboard-size')?.value || '50', 10),
@@ -940,8 +940,9 @@ class Blight {
                     indexDirs: this._currentIndexDirs,
                 };
                 try {
-                    await SaveSettings(cfg);
-                    this._applyRuntimeSettings(cfg);
+                    const cfgObj = main.BlightConfig.createFrom(cfg);
+                    await SaveSettings(cfgObj);
+                    this._applyRuntimeSettings(cfgObj);
                     if (this.settingsMode) {
                         CloseSettings();
                         return;
