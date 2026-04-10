@@ -14,13 +14,6 @@ interface Notification {
     time: string;
 }
 
-// Secondary action mapping: result id prefix → action id
-const SECONDARY_ACTIONS: Record<string, string> = {
-    'file-open:': 'explorer',
-    'clip-':      'copy',
-    'sys-':       'run',
-};
-
 function inputEl(id: string): HTMLInputElement | null {
     const el = document.getElementById(id);
     return el instanceof HTMLInputElement ? el : null;
