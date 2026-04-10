@@ -689,8 +689,8 @@ func StartConsole(logger *Logger) (int, error) {
 		w.Header().Set("Connection", "keep-alive")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 
-		ch := logger.Subscribe()
-		defer logger.Unsubscribe(ch)
+		eventChan := logger.Subscribe()
+		defer logger.Unsubscribe(eventChan)
 
 		// Keep alive
 		ctx := r.Context()
@@ -698,7 +698,7 @@ func StartConsole(logger *Logger) (int, error) {
 			select {
 			case <-ctx.Done():
 				return
-			case entry, ok := <-ch:
+			case entry, ok := <-eventChan:
 				if !ok {
 					return
 				}

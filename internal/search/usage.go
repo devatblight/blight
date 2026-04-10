@@ -34,10 +34,10 @@ func NewUsageTracker() *UsageTracker {
 // Record increments the usage count for id and updates the last-used timestamp.
 func (t *UsageTracker) Record(id string) {
 	t.mu.Lock()
-	e := t.entries[id]
-	e.Count++
-	e.LastUsed = time.Now().Unix()
-	t.entries[id] = e
+	entry := t.entries[id]
+	entry.Count++
+	entry.LastUsed = time.Now().Unix()
+	t.entries[id] = entry
 	t.mu.Unlock()
 	go t.save()
 }
@@ -47,17 +47,17 @@ func (t *UsageTracker) Record(id string) {
 // Score = count * recencyFactor, where recencyFactor ∈ (0, 1] decays over ~30 days.
 func (t *UsageTracker) Score(id string) int {
 	t.mu.RLock()
-	e, ok := t.entries[id]
+	entry, ok := t.entries[id]
 	t.mu.RUnlock()
 
-	if !ok || e.Count == 0 {
+	if !ok || entry.Count == 0 {
 		return 0
 	}
 
-	daysSince := time.Since(time.Unix(e.LastUsed, 0)).Hours() / 24
+	daysSince := time.Since(time.Unix(entry.LastUsed, 0)).Hours() / 24
 	// Decay half-life ≈ 30 days: factor = 0.5^(days/30)
 	recency := math.Pow(0.5, daysSince/30.0)
-	return int(float64(e.Count)*recency*100) + 1
+	return int(float64(entry.Count)*recency*100) + 1
 }
 
 func (t *UsageTracker) load() {

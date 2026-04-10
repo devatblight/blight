@@ -164,12 +164,12 @@ func (a *App) shutdown(ctx context.Context) {
 }
 
 func (a *App) CheckForUpdates() UpdateInfo {
-	u := updater.New("devatblight/blight")
+	appUpdater := updater.New("devatblight/blight")
 	log := debug.Get()
 
 	log.Info("checking for updates", map[string]interface{}{"current": a.version})
 
-	rel, found, err := u.CheckForUpdates(a.version)
+	rel, found, err := appUpdater.CheckForUpdates(a.version)
 	if err != nil {
 		log.Error("update check failed", map[string]interface{}{"error": err.Error()})
 		return UpdateInfo{Error: err.Error()}
@@ -192,9 +192,9 @@ func (a *App) CheckForUpdates() UpdateInfo {
 
 func (a *App) InstallUpdate() string {
 	log := debug.Get()
-	u := updater.New("devatblight/blight")
+	appUpdater := updater.New("devatblight/blight")
 
-	rel, found, err := u.CheckForUpdates(a.version)
+	rel, found, err := appUpdater.CheckForUpdates(a.version)
 	if err != nil {
 		return "Check failed: " + err.Error()
 	}
@@ -203,7 +203,7 @@ func (a *App) InstallUpdate() string {
 	}
 
 	log.Info("installing update", map[string]interface{}{"version": rel.Version})
-	if err := u.ApplyUpdate(rel); err != nil {
+	if err := appUpdater.ApplyUpdate(rel); err != nil {
 		log.Error("update failed", map[string]interface{}{"error": err.Error()})
 		return "Update failed: " + err.Error()
 	}
@@ -666,14 +666,14 @@ func (a *App) searchFiles(query string) []SearchResult {
 	}
 
 	var results []SearchResult
-	for _, f := range fileResults {
+	for _, fileResult := range fileResults {
 		results = append(results, SearchResult{
-			ID:       "file-open:" + f.Path,
-			Title:    f.Name,
-			Subtitle: prettifyPath(f.Dir),
+			ID:       "file-open:" + fileResult.Path,
+			Title:    fileResult.Name,
+			Subtitle: prettifyPath(fileResult.Dir),
 			Icon:     "",
 			Category: "Files",
-			Path:     f.Path,
+			Path:     fileResult.Path,
 		})
 	}
 
@@ -798,10 +798,10 @@ func prettifyPath(path string) string {
 
 // isURL returns true if s looks like an http/https/ftp URL.
 func isURL(s string) bool {
-	sl := strings.ToLower(s)
-	return strings.HasPrefix(sl, "http://") ||
-		strings.HasPrefix(sl, "https://") ||
-		strings.HasPrefix(sl, "ftp://")
+	lowercased := strings.ToLower(s)
+	return strings.HasPrefix(lowercased, "http://") ||
+		strings.HasPrefix(lowercased, "https://") ||
+		strings.HasPrefix(lowercased, "ftp://")
 }
 
 // isFilePath returns true if s looks like a Windows absolute path or UNC path.

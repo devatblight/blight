@@ -50,16 +50,16 @@ func Evaluate(input string) CalcResult {
 }
 
 func IsCalcQuery(query string) bool {
-	q := strings.TrimSpace(query)
-	if strings.HasPrefix(q, "=") {
+	trimmedQuery := strings.TrimSpace(query)
+	if strings.HasPrefix(trimmedQuery, "=") {
 		return true
 	}
-	if len(q) < 2 {
+	if len(trimmedQuery) < 2 {
 		return false
 	}
 
 	// If it starts with a known math function name, treat as calc
-	lq := strings.ToLower(q)
+	queryLower := strings.ToLower(trimmedQuery)
 	mathFuncs := []string{
 		"sqrt(", "abs(", "floor(", "ceil(", "round(",
 		"sin(", "cos(", "tan(", "asin(", "acos(", "atan(",
@@ -67,18 +67,18 @@ func IsCalcQuery(query string) bool {
 		"cbrt(", "atan2(", "min(", "max(",
 	}
 	for _, fn := range mathFuncs {
-		if strings.HasPrefix(lq, fn) {
+		if strings.HasPrefix(queryLower, fn) {
 			return true
 		}
 	}
 
 	hasDigit := false
 	hasOp := false
-	for _, c := range q {
-		if c >= '0' && c <= '9' {
+	for _, char := range trimmedQuery {
+		if char >= '0' && char <= '9' {
 			hasDigit = true
 		}
-		if c == '+' || c == '-' || c == '*' || c == '/' || c == '%' || c == '^' {
+		if char == '+' || char == '-' || char == '*' || char == '/' || char == '%' || char == '^' {
 			hasOp = true
 		}
 	}
@@ -190,11 +190,11 @@ func evalNode(node ast.Expr) (float64, error) {
 		// Evaluate all arguments
 		args := make([]float64, len(n.Args))
 		for i, arg := range n.Args {
-			v, err := evalNode(arg)
+			argVal, err := evalNode(arg)
 			if err != nil {
 				return 0, fmt.Errorf("arg %d: %w", i, err)
 			}
-			args[i] = v
+			args[i] = argVal
 		}
 
 		return callMathFunc(fnName, args)
@@ -342,25 +342,25 @@ func callMathFunc(name string, args []float64) (float64, error) {
 		if err := atLeast(1); err != nil {
 			return 0, err
 		}
-		m := args[0]
-		for _, v := range args[1:] {
-			if v < m {
-				m = v
+		result := args[0]
+		for _, candidate := range args[1:] {
+			if candidate < result {
+				result = candidate
 			}
 		}
-		return m, nil
+		return result, nil
 
 	case "max":
 		if err := atLeast(1); err != nil {
 			return 0, err
 		}
-		m := args[0]
-		for _, v := range args[1:] {
-			if v > m {
-				m = v
+		result := args[0]
+		for _, candidate := range args[1:] {
+			if candidate > result {
+				result = candidate
 			}
 		}
-		return m, nil
+		return result, nil
 
 	case "mod":
 		if err := need(2); err != nil {
@@ -405,34 +405,34 @@ func callMathFunc(name string, args []float64) (float64, error) {
 		if err := need(3); err != nil {
 			return 0, err
 		}
-		v, lo, hi := args[0], args[1], args[2]
-		if v < lo {
-			return lo, nil
+		value, lowerBound, upperBound := args[0], args[1], args[2]
+		if value < lowerBound {
+			return lowerBound, nil
 		}
-		if v > hi {
-			return hi, nil
+		if value > upperBound {
+			return upperBound, nil
 		}
-		return v, nil
+		return value, nil
 	}
 
 	return 0, fmt.Errorf("unknown function: %s()", name)
 }
 
-func formatNumber(f float64) string {
-	if math.IsInf(f, 1) {
+func formatNumber(num float64) string {
+	if math.IsInf(num, 1) {
 		return "∞"
 	}
-	if math.IsInf(f, -1) {
+	if math.IsInf(num, -1) {
 		return "-∞"
 	}
-	if math.IsNaN(f) {
+	if math.IsNaN(num) {
 		return "NaN"
 	}
-	if f == float64(int64(f)) {
-		return fmt.Sprintf("%d", int64(f))
+	if num == float64(int64(num)) {
+		return fmt.Sprintf("%d", int64(num))
 	}
-	s := fmt.Sprintf("%.10f", f)
-	s = strings.TrimRight(s, "0")
-	s = strings.TrimRight(s, ".")
-	return s
+	formatted := fmt.Sprintf("%.10f", num)
+	formatted = strings.TrimRight(formatted, "0")
+	formatted = strings.TrimRight(formatted, ".")
+	return formatted
 }

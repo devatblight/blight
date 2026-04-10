@@ -774,6 +774,19 @@ class Blight {
             });
         }
 
+        const addDirectoryBtn = document.getElementById('settings-add-dir')
+        if (addDirectoryBtn) {
+            addDirectoryBtn.addEventListener('click', async () => {
+                addDirectoryBtn.disabled = true
+                addDirectoryBtn.textContent = "Opening Explorer..."
+                try {
+                    const directory = window.show
+                } catch (error) {
+                    
+                }
+            })
+        }
+
         const checkUpdatesBtn = document.getElementById('settings-check-updates');
         const updateStatus = document.getElementById('settings-update-status');
         if (checkUpdatesBtn) {

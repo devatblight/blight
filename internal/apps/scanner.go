@@ -60,11 +60,11 @@ func (s *Scanner) Names() []string {
 
 func (s *Scanner) startMenuDirs() []string {
 	var dirs []string
-	if d := os.Getenv("ProgramData"); d != "" {
-		dirs = append(dirs, filepath.Join(d, "Microsoft", "Windows", "Start Menu", "Programs"))
+	if baseDir := os.Getenv("ProgramData"); baseDir != "" {
+		dirs = append(dirs, filepath.Join(baseDir, "Microsoft", "Windows", "Start Menu", "Programs"))
 	}
-	if d := os.Getenv("AppData"); d != "" {
-		dirs = append(dirs, filepath.Join(d, "Microsoft", "Windows", "Start Menu", "Programs"))
+	if baseDir := os.Getenv("AppData"); baseDir != "" {
+		dirs = append(dirs, filepath.Join(baseDir, "Microsoft", "Windows", "Start Menu", "Programs"))
 	}
 	return dirs
 }

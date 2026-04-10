@@ -8,7 +8,10 @@
       "Bash(node:*)",
       "Bash(GOOS=windows GOARCH=amd64 go build:*)",
       "Bash(xargs wc:*)",
-      "Bash(go build:*)"
+      "Bash(go build:*)",
+      "Bash(wails build:*)",
+      "Read(//home/bluejutzu/go/**)",
+      "Bash(~/go/bin/wails build:*)"
     ]
   }
 }

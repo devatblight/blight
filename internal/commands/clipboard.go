@@ -94,13 +94,13 @@ func (h *ClipboardHistory) Delete(index int) {
 	go h.save()
 }
 
-func (h *ClipboardHistory) SetMaxSize(n int) {
+func (h *ClipboardHistory) SetMaxSize(size int) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if n < 1 {
-		n = 1
+	if size < 1 {
+		size = 1
 	}
-	h.maxSize = n
+	h.maxSize = size
 	if len(h.entries) > h.maxSize {
 		h.entries = h.entries[:h.maxSize]
 	}

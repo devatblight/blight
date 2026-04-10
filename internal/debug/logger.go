@@ -101,18 +101,18 @@ func (l *Logger) Close() {
 func (l *Logger) Subscribe() chan LogEntry {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	ch := make(chan LogEntry, 100)
-	l.sseClients = append(l.sseClients, ch)
-	return ch
+	clientChan := make(chan LogEntry, 100)
+	l.sseClients = append(l.sseClients, clientChan)
+	return clientChan
 }
 
-func (l *Logger) Unsubscribe(ch chan LogEntry) {
+func (l *Logger) Unsubscribe(clientChan chan LogEntry) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	for i, c := range l.sseClients {
-		if c == ch {
+	for i, client := range l.sseClients {
+		if client == clientChan {
 			l.sseClients = append(l.sseClients[:i], l.sseClients[i+1:]...)
-			close(ch)
+			close(clientChan)
 			return
 		}
 	}
@@ -134,9 +134,9 @@ func (l *Logger) log(level Level, msg string, fields map[string]interface{}, ski
 	pc, file, line, ok := runtime.Caller(skip)
 	funcName := "unknown"
 	if ok {
-		fn := runtime.FuncForPC(pc)
-		if fn != nil {
-			funcName = fn.Name()
+		funcInfo := runtime.FuncForPC(pc)
+		if funcInfo != nil {
+			funcName = funcInfo.Name()
 			// Shorten to just package.Function
 			parts := strings.Split(funcName, "/")
 			funcName = parts[len(parts)-1]
@@ -171,13 +171,13 @@ func (l *Logger) log(level Level, msg string, fields map[string]interface{}, ski
 		for len(levelPad) < 5 {
 			levelPad += " "
 		}
-		line := fmt.Sprintf("[%s] %s  %s  (%s:%d %s)",
+		logLine := fmt.Sprintf("[%s] %s  %s  (%s:%d %s)",
 			entry.Time, levelPad, entry.Message, entry.File, entry.Line, entry.Function)
 		if len(fields) > 0 {
 			fieldsJSON, _ := json.Marshal(fields)
-			line += "  " + string(fieldsJSON)
+			logLine += "  " + string(fieldsJSON)
 		}
-		l.file.WriteString(line + "\n")
+		l.file.WriteString(logLine + "\n")
 		l.file.Sync() // Flush immediately — critical for crash resilience
 	}
 
@@ -193,36 +193,36 @@ func (l *Logger) log(level Level, msg string, fields map[string]interface{}, ski
 }
 
 func (l *Logger) Debug(msg string, fields ...map[string]interface{}) {
-	f := mergeFields(fields)
-	l.log(LevelDebug, msg, f, 2)
+	mergedFields := mergeFields(fields)
+	l.log(LevelDebug, msg, mergedFields, 2)
 }
 
 func (l *Logger) Info(msg string, fields ...map[string]interface{}) {
-	f := mergeFields(fields)
-	l.log(LevelInfo, msg, f, 2)
+	mergedFields := mergeFields(fields)
+	l.log(LevelInfo, msg, mergedFields, 2)
 }
 
 func (l *Logger) Warn(msg string, fields ...map[string]interface{}) {
-	f := mergeFields(fields)
-	l.log(LevelWarn, msg, f, 2)
+	mergedFields := mergeFields(fields)
+	l.log(LevelWarn, msg, mergedFields, 2)
 }
 
 func (l *Logger) Error(msg string, fields ...map[string]interface{}) {
-	f := mergeFields(fields)
-	l.log(LevelError, msg, f, 2)
+	mergedFields := mergeFields(fields)
+	l.log(LevelError, msg, mergedFields, 2)
 }
 
 func (l *Logger) Fatal(msg string, fields ...map[string]interface{}) {
-	f := mergeFields(fields)
-	l.log(LevelFatal, msg, f, 2)
+	mergedFields := mergeFields(fields)
+	l.log(LevelFatal, msg, mergedFields, 2)
 }
 
 // RecoverPanic should be deferred at the top of main() and goroutines
 func (l *Logger) RecoverPanic(context string) {
 	if r := recover(); r != nil {
 		buf := make([]byte, 4096)
-		n := runtime.Stack(buf, false)
-		stackTrace := string(buf[:n])
+		stackSize := runtime.Stack(buf, false)
+		stackTrace := string(buf[:stackSize])
 
 		l.log(LevelFatal, fmt.Sprintf("PANIC in %s: %v", context, r), map[string]interface{}{
 			"panic": fmt.Sprintf("%v", r),

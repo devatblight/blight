@@ -56,8 +56,8 @@ func ParseHotkey(s string) HotkeyConfig {
 	var cfg HotkeyConfig
 
 	for _, part := range parts {
-		p := strings.TrimSpace(part)
-		switch strings.ToLower(p) {
+		trimmedPart := strings.TrimSpace(part)
+		switch strings.ToLower(trimmedPart) {
 		case "alt":
 			cfg.Modifiers = append(cfg.Modifiers, VK_MENU)
 			cfg.NeedsAltHook = true
@@ -68,7 +68,7 @@ func ParseHotkey(s string) HotkeyConfig {
 		case "win", "windows", "super":
 			cfg.Modifiers = append(cfg.Modifiers, VK_LWIN)
 		default:
-			cfg.Key = parseKeyName(p)
+			cfg.Key = parseKeyName(trimmedPart)
 		}
 	}
 
@@ -82,8 +82,8 @@ func ParseHotkey(s string) HotkeyConfig {
 	return cfg
 }
 
-func parseKeyName(s string) uint32 {
-	switch strings.ToLower(s) {
+func parseKeyName(name string) uint32 {
+	switch strings.ToLower(name) {
 	case "space":
 		return VK_SPACE
 	case "tab":
@@ -99,31 +99,31 @@ func parseKeyName(s string) uint32 {
 	}
 
 	// F1–F12
-	if len(s) >= 2 && (s[0] == 'f' || s[0] == 'F') {
-		n := uint32(0)
-		for _, c := range s[1:] {
-			if c < '0' || c > '9' {
-				n = 0
+	if len(name) >= 2 && (name[0] == 'f' || name[0] == 'F') {
+		fKeyNum := uint32(0)
+		for _, digit := range name[1:] {
+			if digit < '0' || digit > '9' {
+				fKeyNum = 0
 				break
 			}
-			n = n*10 + uint32(c-'0')
+			fKeyNum = fKeyNum*10 + uint32(digit-'0')
 		}
-		if n >= 1 && n <= 12 {
-			return VK_F1 + n - 1
+		if fKeyNum >= 1 && fKeyNum <= 12 {
+			return VK_F1 + fKeyNum - 1
 		}
 	}
 
 	// Single letter A–Z (VK code == ASCII uppercase)
-	if len(s) == 1 {
-		c := s[0]
-		if c >= 'a' && c <= 'z' {
-			return uint32(c - 32) // uppercase
+	if len(name) == 1 {
+		keyChar := name[0]
+		if keyChar >= 'a' && keyChar <= 'z' {
+			return uint32(keyChar - 32) // uppercase
 		}
-		if c >= 'A' && c <= 'Z' {
-			return uint32(c)
+		if keyChar >= 'A' && keyChar <= 'Z' {
+			return uint32(keyChar)
 		}
-		if c >= '0' && c <= '9' {
-			return uint32(c)
+		if keyChar >= '0' && keyChar <= '9' {
+			return uint32(keyChar)
 		}
 	}
 
