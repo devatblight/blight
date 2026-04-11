@@ -13,9 +13,15 @@ export function CloseSettings():Promise<void>;
 
 export function CompleteOnboarding(arg1:string):Promise<void>;
 
+export function DeleteAlias(arg1:string):Promise<void>;
+
 export function Execute(arg1:string):Promise<string>;
 
 export function ExecuteContextAction(arg1:string,arg2:string):Promise<string>;
+
+export function ExportSettings():Promise<string>;
+
+export function GetAliases():Promise<Record<string, string>>;
 
 export function GetConfig():Promise<main.BlightConfig>;
 
@@ -31,9 +37,13 @@ export function GetInstallDir():Promise<string>;
 
 export function GetStartupEnabled():Promise<boolean>;
 
+export function GetUsageScores():Promise<Record<string, number>>;
+
 export function GetVersion():Promise<string>;
 
 export function HideWindow():Promise<void>;
+
+export function ImportSettings(arg1:string):Promise<void>;
 
 export function InstallUpdate():Promise<string>;
 
@@ -51,11 +61,15 @@ export function RefreshApps():Promise<void>;
 
 export function ReindexFiles():Promise<void>;
 
+export function SaveAlias(arg1:string,arg2:string):Promise<void>;
+
 export function SaveSettings(arg1:main.BlightConfig):Promise<void>;
 
 export function Search(arg1:string):Promise<Array<main.SearchResult>>;
 
 export function ShowWindow():Promise<void>;
+
+export function TogglePinned(arg1:string):Promise<boolean>;
 
 export function ToggleWindow():Promise<void>;
 
