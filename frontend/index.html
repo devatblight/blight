@@ -130,8 +130,8 @@
     <!-- Main Launcher UI -->
     <div id="app" class="launcher hidden">
       <!-- Search Bar -->
-      <div class="search-container">
-        <div class="search-icon">
+      <div class="search-container" role="search">
+        <div class="search-icon" aria-hidden="true">
           <svg
             width="20"
             height="20"
@@ -152,18 +152,26 @@
           placeholder="Search apps, commands, files…"
           autocomplete="off"
           spellcheck="false"
+          aria-label="Search"
+          role="combobox"
+          aria-expanded="false"
+          aria-controls="results"
         />
-        <div id="search-loader" class="search-loader"></div>
-        <div class="search-shortcut">
+        <div id="search-loader" class="search-loader" aria-hidden="true"></div>
+        <div id="calc-preview" class="calc-preview" aria-live="polite"></div>
+        <div class="search-filter-pills" id="search-filter-pills"></div>
+        <div class="search-shortcut" aria-hidden="true">
           <kbd>Esc</kbd>
         </div>
       </div>
+      <!-- Search history dropdown -->
+      <div id="search-history" class="search-history hidden" role="listbox" aria-label="Recent searches"></div>
 
       <!-- Divider -->
       <div class="divider"></div>
 
       <!-- Results -->
-      <div id="results" class="results-container">
+      <div id="results" class="results-container" role="listbox" aria-label="Search results" aria-live="polite">
         <!-- Results are rendered by JS -->
       </div>
 
@@ -212,6 +220,7 @@
           <button class="settings-nav-item" data-tab="appearance">Appearance</button>
           <button class="settings-nav-item" data-tab="system">System</button>
           <button class="settings-nav-item" data-tab="files">File Index</button>
+          <button class="settings-nav-item" data-tab="aliases">Aliases</button>
           <button class="settings-nav-item" data-tab="updates">Updates</button>
           <button class="settings-nav-item" data-tab="misc">Misc</button>
         </nav>
@@ -454,6 +463,28 @@
             </div>
           </div>
 
+          <!-- === TAB: Aliases === -->
+          <div class="settings-tab hidden" id="tab-aliases">
+            <div class="settings-section-group">
+              <div class="settings-group-label">Aliases</div>
+
+              <div class="settings-row-item">
+                <div class="settings-row-info">
+                  <div class="settings-row-name">New Alias</div>
+                  <div class="settings-row-desc">Create a keyword shortcut that copies text or opens a URL</div>
+                </div>
+                <div class="settings-row-control alias-add-controls">
+                  <input id="alias-trigger-input" class="settings-input" type="text" maxlength="32" placeholder="trigger" title="Keyword to type in the launcher" />
+                  <span class="settings-input-unit">→</span>
+                  <input id="alias-expansion-input" class="settings-input settings-input-wide" type="text" placeholder="URL or text snippet" title="What happens when you use the alias: URL opens in browser, text is copied" />
+                  <button id="alias-add-btn" class="settings-btn settings-btn-primary">Add</button>
+                </div>
+              </div>
+
+              <div id="aliases-list" class="aliases-list"></div>
+            </div>
+          </div>
+
           <!-- === TAB: Updates === -->
           <div class="settings-tab hidden" id="tab-updates">
             <div class="settings-section-group">
@@ -507,6 +538,31 @@
                 </div>
                 <div class="settings-row-control">
                   <button id="misc-open-install" class="settings-btn">Open</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-section-group">
+              <div class="settings-group-label">Backup</div>
+
+              <div class="settings-row-item">
+                <div class="settings-row-info">
+                  <div class="settings-row-name">Export Settings</div>
+                  <div class="settings-row-desc">Save your current configuration to a JSON file</div>
+                </div>
+                <div class="settings-row-control">
+                  <button id="misc-export-settings" class="settings-btn">Export</button>
+                </div>
+              </div>
+
+              <div class="settings-row-item">
+                <div class="settings-row-info">
+                  <div class="settings-row-name">Import Settings</div>
+                  <div class="settings-row-desc">Restore configuration from a JSON export</div>
+                </div>
+                <div class="settings-row-control">
+                  <button id="misc-import-settings" class="settings-btn">Import</button>
+                  <input id="misc-import-file" type="file" accept=".json" style="display:none" />
                 </div>
               </div>
             </div>

@@ -42,6 +42,8 @@ export namespace main {
 	    // Go type: time
 	    lastIndexedAt?: any;
 	    disableFolderIndex?: boolean;
+	    aliases?: Record<string, string>;
+	    pinnedItems?: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new BlightConfig(source);
@@ -66,6 +68,8 @@ export namespace main {
 	        this.hideNotifyIcon = source["hideNotifyIcon"];
 	        this.lastIndexedAt = this.convertValues(source["lastIndexedAt"], null);
 	        this.disableFolderIndex = source["disableFolderIndex"];
+	        this.aliases = source["aliases"];
+	        this.pinnedItems = source["pinnedItems"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

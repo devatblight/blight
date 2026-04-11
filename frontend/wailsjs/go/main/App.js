@@ -22,12 +22,24 @@ export function CompleteOnboarding(arg1) {
   return window['go']['main']['App']['CompleteOnboarding'](arg1);
 }
 
+export function DeleteAlias(arg1) {
+  return window['go']['main']['App']['DeleteAlias'](arg1);
+}
+
 export function Execute(arg1) {
   return window['go']['main']['App']['Execute'](arg1);
 }
 
 export function ExecuteContextAction(arg1, arg2) {
   return window['go']['main']['App']['ExecuteContextAction'](arg1, arg2);
+}
+
+export function ExportSettings() {
+  return window['go']['main']['App']['ExportSettings']();
+}
+
+export function GetAliases() {
+  return window['go']['main']['App']['GetAliases']();
 }
 
 export function GetConfig() {
@@ -58,12 +70,20 @@ export function GetStartupEnabled() {
   return window['go']['main']['App']['GetStartupEnabled']();
 }
 
+export function GetUsageScores() {
+  return window['go']['main']['App']['GetUsageScores']();
+}
+
 export function GetVersion() {
   return window['go']['main']['App']['GetVersion']();
 }
 
 export function HideWindow() {
   return window['go']['main']['App']['HideWindow']();
+}
+
+export function ImportSettings(arg1) {
+  return window['go']['main']['App']['ImportSettings'](arg1);
 }
 
 export function InstallUpdate() {
@@ -98,6 +118,10 @@ export function ReindexFiles() {
   return window['go']['main']['App']['ReindexFiles']();
 }
 
+export function SaveAlias(arg1, arg2) {
+  return window['go']['main']['App']['SaveAlias'](arg1, arg2);
+}
+
 export function SaveSettings(arg1) {
   return window['go']['main']['App']['SaveSettings'](arg1);
 }
@@ -108,6 +132,10 @@ export function Search(arg1) {
 
 export function ShowWindow() {
   return window['go']['main']['App']['ShowWindow']();
+}
+
+export function TogglePinned(arg1) {
+  return window['go']['main']['App']['TogglePinned'](arg1);
 }
 
 export function ToggleWindow() {

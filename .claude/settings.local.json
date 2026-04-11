@@ -14,7 +14,25 @@
       "Bash(git commit:*)",
       "Bash(git push:*)",
       "Bash(gh pr:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(grep -n \"SelectFile\\\\|Dialog\\\\|OpenFile\\\\|Choose\" /mnt/c/Users/Bluejutzu/code/blight/*.go /mnt/c/Users/Bluejutzu/code/blight/internal/**/*.go)",
+      "Bash(xargs ls:*)",
+      "Bash(grep -rn \"windows\\\\|Windows\\\\|#\\\\[cfg\" /mnt/c/Users/Bluejutzu/code/blight/*.go)",
+      "Bash(grep -l \"error\\\\|Error\\\\|message\\\\|Message\" /mnt/c/Users/Bluejutzu/code/blight/internal/**/*.go)",
+      "Bash(wc -l /mnt/c/Users/Bluejutzu/code/blight/internal/**/*.go)",
+      "Bash(ls:*)",
+      "Bash(/usr/local/go/bin/go build:*)",
+      "Bash(wails build:*)",
+      "Bash(/mnt/c/Users/Bluejutzu/go/bin/wails.exe build:*)",
+      "Bash(gh api:*)",
+      "Bash(git fetch:*)",
+      "Bash(git merge:*)",
+      "Bash(head -50 /mnt/c/Users/Bluejutzu/code/blight/internal/files/*.go)",
+      "Bash(head -100 /mnt/c/Users/Bluejutzu/code/blight/internal/search/*.go)",
+      "Bash(/mnt/c/Users/Bluejutzu/go/bin/wails.exe version:*)",
+      "Read(//usr/local/go/**)",
+      "Read(//usr/**)",
+      "Bash(wc:*)"
     ]
   }
 }

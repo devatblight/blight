@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -72,11 +73,16 @@ type BlightConfig struct {
 
 	// System integration
 	StartOnStartup bool      `json:"startOnStartup"` // add to Windows startup, default false
-	HideNotifyIcon bool      `json:"hideNotifyIcon"`  // hide system tray icon, default false
+	HideNotifyIcon bool      `json:"hideNotifyIcon"` // hide system tray icon, default false
 	LastIndexedAt  time.Time `json:"lastIndexedAt,omitempty"`
 
 	// File index behaviour
 	DisableFolderIndex bool `json:"disableFolderIndex,omitempty"` // exclude folders from search results, default false
+
+	// User-defined aliases: trigger → expansion (URL or text snippet)
+	Aliases map[string]string `json:"aliases,omitempty"`
+	// IDs of pinned items — shown first in spotlight view and boosted in search
+	PinnedItems []string `json:"pinnedItems,omitempty"`
 }
 
 type App struct {
@@ -466,6 +472,13 @@ func (a *App) SaveSettings(cfg BlightConfig) error {
 	a.config.HideNotifyIcon = cfg.HideNotifyIcon
 	a.config.DisableFolderIndex = cfg.DisableFolderIndex
 
+	if cfg.Aliases != nil {
+		a.config.Aliases = cfg.Aliases
+	}
+	if cfg.PinnedItems != nil {
+		a.config.PinnedItems = cfg.PinnedItems
+	}
+
 	// System startup: sync Windows registry
 	if cfg.StartOnStartup != a.config.StartOnStartup {
 		a.config.StartOnStartup = cfg.StartOnStartup
@@ -529,6 +542,21 @@ func (a *App) Search(query string) []SearchResult {
 			Icon:     "",
 			Category: "Web",
 		})
+	}
+
+	// Aliases — match any trigger that starts with the query
+	if len(a.config.Aliases) > 0 {
+		qLower := strings.ToLower(query)
+		for trigger, expansion := range a.config.Aliases {
+			if strings.HasPrefix(strings.ToLower(trigger), qLower) {
+				results = append(results, SearchResult{
+					ID:       "alias:" + trigger,
+					Title:    trigger,
+					Subtitle: expansion,
+					Category: "Aliases",
+				})
+			}
+		}
 	}
 
 	if commands.IsCalcQuery(query) {
@@ -616,6 +644,22 @@ func (a *App) Execute(id string) string {
 		return "ok"
 	}
 
+	if strings.HasPrefix(id, "alias:") {
+		trigger := strings.TrimPrefix(id, "alias:")
+		expansion, ok := a.config.Aliases[trigger]
+		if !ok {
+			return "not found"
+		}
+		if strings.HasPrefix(expansion, "http://") || strings.HasPrefix(expansion, "https://") {
+			runtime.BrowserOpenURL(a.ctx, expansion)
+			runtime.WindowHide(a.ctx)
+			a.visible.Store(false)
+			return "ok"
+		}
+		runtime.ClipboardSetText(a.ctx, expansion)
+		return "copied"
+	}
+
 	if id == "calc-result" {
 		runtime.ClipboardSetText(a.ctx, "")
 		return "copied"
@@ -699,20 +743,62 @@ func (a *App) GetContextActions(id string) []ContextAction {
 		return []ContextAction{
 			{ID: "run", Label: "Run", Icon: "▶"},
 		}
+	case strings.HasPrefix(id, "alias:"):
+		return []ContextAction{
+			{ID: "open", Label: "Use", Icon: "▶"},
+			{ID: "copy", Label: "Copy Expansion", Icon: "📋"},
+			{ID: "delete-alias", Label: "Delete Alias", Icon: "🗑️"},
+		}
 	case id == "calc-result" || id == "no-results" || strings.HasPrefix(id, "web-search:"):
 		return []ContextAction{}
 	default:
-		// App
+		// App — dynamic pin label
+		pinLabel := "Pin to Top"
+		for _, p := range a.config.PinnedItems {
+			if p == id {
+				pinLabel = "Unpin from Top"
+				break
+			}
+		}
 		return []ContextAction{
 			{ID: "open", Label: "Open", Icon: "▶"},
 			{ID: "admin", Label: "Run as Administrator", Icon: "🛡️"},
 			{ID: "explorer", Label: "Show in Explorer", Icon: "📂"},
 			{ID: "copy-path", Label: "Copy Path", Icon: "📋"},
+			{ID: "pin", Label: pinLabel, Icon: "📌"},
 		}
 	}
 }
 
 func (a *App) ExecuteContextAction(resultID string, actionID string) string {
+	// Aliases
+	if strings.HasPrefix(resultID, "alias:") {
+		trigger := strings.TrimPrefix(resultID, "alias:")
+		expansion, ok := a.config.Aliases[trigger]
+		if !ok {
+			return "not found"
+		}
+		switch actionID {
+		case "open":
+			if strings.HasPrefix(expansion, "http://") || strings.HasPrefix(expansion, "https://") {
+				runtime.BrowserOpenURL(a.ctx, expansion)
+				runtime.WindowHide(a.ctx)
+				a.visible.Store(false)
+			} else {
+				runtime.ClipboardSetText(a.ctx, expansion)
+			}
+			return "ok"
+		case "copy":
+			runtime.ClipboardSetText(a.ctx, expansion)
+			return "ok"
+		case "delete-alias":
+			delete(a.config.Aliases, trigger)
+			_ = a.saveConfig()
+			return "ok"
+		}
+		return "unknown action"
+	}
+
 	// Folders
 	if strings.HasPrefix(resultID, "dir-open:") {
 		dirPath := strings.TrimPrefix(resultID, "dir-open:")
@@ -826,6 +912,13 @@ func (a *App) ExecuteContextAction(resultID string, actionID string) string {
 	case "copy-path":
 		runtime.ClipboardSetText(a.ctx, target.Path)
 		return "ok"
+
+	case "pin":
+		pinned := a.TogglePinned(resultID)
+		if pinned {
+			return "pinned"
+		}
+		return "unpinned"
 	}
 
 	return "unknown action"
@@ -846,6 +939,82 @@ func (a *App) RefreshApps() {
 
 func (a *App) GetIndexStatus() files.IndexStatus {
 	return a.fileIdx.Status()
+}
+
+// ExportSettings returns the current config as a JSON string.
+func (a *App) ExportSettings() string {
+	data, err := json.MarshalIndent(a.config, "", "  ")
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+// ImportSettings replaces the current config with one parsed from a JSON string.
+func (a *App) ImportSettings(data string) error {
+	var cfg BlightConfig
+	if err := json.Unmarshal([]byte(data), &cfg); err != nil {
+		return fmt.Errorf("invalid settings JSON: %w", err)
+	}
+	a.config = cfg
+	return a.saveConfig()
+}
+
+// GetUsageScores returns a map of item ID → decayed usage score for items with
+// at least one recorded use. Used by the frontend to show frequency indicators.
+func (a *App) GetUsageScores() map[string]int {
+	scores := make(map[string]int)
+	for _, app := range a.scanner.Apps() {
+		if s := a.usage.Score(app.Name); s > 0 {
+			scores[app.Name] = s
+		}
+	}
+	return scores
+}
+
+// GetAliases returns the current alias map (trigger → expansion).
+func (a *App) GetAliases() map[string]string {
+	if a.config.Aliases == nil {
+		return map[string]string{}
+	}
+	return a.config.Aliases
+}
+
+// SaveAlias creates or updates an alias.
+func (a *App) SaveAlias(trigger, expansion string) error {
+	trigger = strings.TrimSpace(trigger)
+	expansion = strings.TrimSpace(expansion)
+	if trigger == "" || expansion == "" {
+		return fmt.Errorf("trigger and expansion must not be empty")
+	}
+	if a.config.Aliases == nil {
+		a.config.Aliases = make(map[string]string)
+	}
+	a.config.Aliases[strings.ToLower(trigger)] = expansion
+	return a.saveConfig()
+}
+
+// DeleteAlias removes an alias by trigger.
+func (a *App) DeleteAlias(trigger string) error {
+	if a.config.Aliases != nil {
+		delete(a.config.Aliases, trigger)
+	}
+	return a.saveConfig()
+}
+
+// TogglePinned pins an item if not already pinned, or unpins it if it is.
+// Returns true if the item is now pinned, false if it was unpinned.
+func (a *App) TogglePinned(id string) bool {
+	for i, p := range a.config.PinnedItems {
+		if p == id {
+			a.config.PinnedItems = append(a.config.PinnedItems[:i], a.config.PinnedItems[i+1:]...)
+			_ = a.saveConfig()
+			return false
+		}
+	}
+	a.config.PinnedItems = append(a.config.PinnedItems, id)
+	_ = a.saveConfig()
+	return true
 }
 
 func (a *App) ReindexFiles() {
@@ -967,15 +1136,15 @@ func (a *App) searchApps(query string) []SearchResult {
 	usageScores := make([]int, len(allApps))
 	for i, app := range allApps {
 		usageScores[i] = a.usage.Score(app.Name)
+		if slices.Contains(a.config.PinnedItems, app.Name) {
+			usageScores[i] += 100
+		}
 	}
 
 	matches := search.Fuzzy(query, names, usageScores)
 
 	var results []SearchResult
-	limit := a.maxResults()
-	if len(matches) < limit {
-		limit = len(matches)
-	}
+	limit := min(len(matches), a.maxResults())
 
 	for _, match := range matches[:limit] {
 		app := allApps[match.Index]
@@ -1001,6 +1170,29 @@ func (a *App) searchApps(query string) []SearchResult {
 
 func (a *App) getDefaultResults() []SearchResult {
 	allApps := a.scanner.Apps()
+	var results []SearchResult
+
+	// Pinned items first
+	pinnedSet := make(map[string]bool)
+	for _, pinnedID := range a.config.PinnedItems {
+		pinnedSet[pinnedID] = true
+		for _, app := range allApps {
+			if app.Name == pinnedID {
+				subtitle := "Application"
+				if !app.IsLnk {
+					subtitle = prettifyPath(app.Path)
+				}
+				results = append(results, SearchResult{
+					ID:       app.Name,
+					Title:    app.Name,
+					Subtitle: subtitle,
+					Category: "Pinned",
+					Path:     app.Path,
+				})
+				break
+			}
+		}
+	}
 
 	names := a.scanner.Names()
 	usageScores := make([]int, len(allApps))
@@ -1010,13 +1202,15 @@ func (a *App) getDefaultResults() []SearchResult {
 	matches := search.Fuzzy("", names, usageScores)
 
 	count := 6
-	if len(matches) < count {
-		count = len(matches)
-	}
-
-	var results []SearchResult
-	for _, match := range matches[:count] {
+	added := 0
+	for _, match := range matches {
+		if added >= count {
+			break
+		}
 		app := allApps[match.Index]
+		if pinnedSet[app.Name] {
+			continue // already shown above
+		}
 		category := "Suggested"
 		if a.usage.Score(app.Name) > 0 {
 			category = "Recent"
@@ -1025,15 +1219,14 @@ func (a *App) getDefaultResults() []SearchResult {
 		if !app.IsLnk {
 			subtitle = prettifyPath(app.Path)
 		}
-		// Icons are loaded asynchronously by the frontend via GetIcon(path)
 		results = append(results, SearchResult{
 			ID:       app.Name,
 			Title:    app.Name,
 			Subtitle: subtitle,
-			Icon:     "",
 			Category: category,
 			Path:     app.Path,
 		})
+		added++
 	}
 
 	return results
