@@ -29,6 +29,11 @@ export class Settings {
     private currentIndexDirs: string[] = [];
     private lastUpdateCheck = 0;
 
+    // Hotkey recorder state
+    private _hkPending = '';
+    private _hkKeydownFn: ((e: KeyboardEvent) => void) | null = null;
+    private _hkKeyupFn: ((e: KeyboardEvent) => void) | null = null;
+
     constructor(panelEl: HTMLElement, deps: SettingsDeps) {
         this.panelEl = panelEl;
         this.deps = deps;
@@ -148,6 +153,7 @@ export class Settings {
         });
         this._bindTabKeyNav();
         this._bindAliasAdd();
+        this._bindHotkeyBadge();
 
         document.getElementById('settings-close')?.addEventListener('click', () => this.close());
         document.getElementById('settings-cancel')?.addEventListener('click', () => this.close());
@@ -442,6 +448,153 @@ export class Settings {
         expansionInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') doAdd();
         });
+    }
+
+    private _bindHotkeyBadge(): void {
+        document.getElementById('settings-hotkey-edit')?.addEventListener('click', () => {
+            const current = document.getElementById('settings-hotkey-display')?.textContent || 'Alt+Space';
+            this._openHotkeyRecorder(current);
+        });
+    }
+
+    private _openHotkeyRecorder(currentHotkey: string): void {
+        const modal = document.getElementById('hotkey-modal')!;
+        const canvas = document.getElementById('hotkey-canvas')!;
+        const saveBtn = document.getElementById('hotkey-save-btn') as HTMLButtonElement;
+        const clearBtn = document.getElementById('hotkey-clear-btn')!;
+        const cancelBtn = document.getElementById('hotkey-cancel-btn')!;
+        const currentValEl = document.getElementById('hotkey-modal-current-val')!;
+
+        currentValEl.textContent = currentHotkey;
+        this._hkPending = '';
+        saveBtn.disabled = true;
+        this._renderHkCanvas(null, false);
+
+        modal.classList.remove('hidden');
+        canvas.classList.add('hk-active');
+        canvas.focus();
+
+        const close = () => {
+            modal.classList.add('hidden');
+            canvas.classList.remove('hk-active');
+            if (this._hkKeydownFn) document.removeEventListener('keydown', this._hkKeydownFn, true);
+            if (this._hkKeyupFn) document.removeEventListener('keyup', this._hkKeyupFn, true);
+            this._hkKeydownFn = null;
+            this._hkKeyupFn = null;
+        };
+
+        // Close on overlay click
+        modal.onclick = (e: MouseEvent) => { if (e.target === modal) close(); };
+        cancelBtn.onclick = () => close();
+
+        clearBtn.onclick = () => {
+            this._hkPending = '';
+            saveBtn.disabled = true;
+            this._renderHkCanvas(null, false);
+            canvas.focus();
+        };
+
+        saveBtn.onclick = () => {
+            if (this._hkPending) {
+                const display = document.getElementById('settings-hotkey-display')!;
+                display.textContent = this._hkPending;
+                close();
+            }
+        };
+
+        this._hkKeydownFn = (e: KeyboardEvent) => {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+
+            const mods: string[] = [];
+            if (e.ctrlKey) mods.push('Ctrl');
+            if (e.altKey) mods.push('Alt');
+            if (e.shiftKey) mods.push('Shift');
+            if (e.metaKey) mods.push('Win');
+
+            const isModKey = ['Control', 'Alt', 'Shift', 'Meta', 'AltGraph', 'OS'].includes(e.key);
+
+            // Escape with no modifiers cancels the dialog
+            if (e.key === 'Escape' && mods.length === 0) { close(); return; }
+
+            if (isModKey) {
+                // Only modifiers held – show live preview (no main key yet)
+                this._renderHkCanvas(mods, false);
+            } else {
+                const mainKey = this._mapHkKey(e.key);
+                if (mainKey && mods.length > 0) {
+                    // Valid combo: at least one modifier + main key
+                    this._hkPending = [...mods, mainKey].join('+');
+                    saveBtn.disabled = false;
+                    this._renderHkCanvas([...mods, mainKey], true);
+                } else if (mainKey) {
+                    // No modifier – show but mark invalid (no save)
+                    this._renderHkCanvas([mainKey], false);
+                }
+            }
+        };
+
+        this._hkKeyupFn = (e: KeyboardEvent) => {
+            e.preventDefault();
+            // After releasing, keep showing the last confirmed combo (or clear live mods)
+            if (this._hkPending) {
+                this._renderHkCanvas(this._hkPending.split('+'), true);
+            } else {
+                const mods: string[] = [];
+                if (e.ctrlKey) mods.push('Ctrl');
+                if (e.altKey) mods.push('Alt');
+                if (e.shiftKey) mods.push('Shift');
+                if (e.metaKey) mods.push('Win');
+                this._renderHkCanvas(mods.length > 0 ? mods : null, false);
+            }
+        };
+
+        document.addEventListener('keydown', this._hkKeydownFn, true);
+        document.addEventListener('keyup', this._hkKeyupFn, true);
+    }
+
+    /** Render key chips in the hotkey canvas.
+     *  parts=null → show placeholder.
+     *  hasMain=true → last chip styled as the main key (accent), rest as modifiers.
+     *  hasMain=false → all chips muted (live modifier preview, not yet a valid combo).
+     */
+    private _renderHkCanvas(parts: string[] | null, hasMain: boolean): void {
+        const placeholder = document.getElementById('hotkey-placeholder')!;
+        const chipsRow = document.getElementById('hotkey-chips-row') as HTMLElement;
+
+        if (!parts || parts.length === 0) {
+            placeholder.style.display = '';
+            chipsRow.style.display = 'none';
+            chipsRow.innerHTML = '';
+            return;
+        }
+
+        placeholder.style.display = 'none';
+        chipsRow.style.display = 'flex';
+        chipsRow.style.opacity = hasMain ? '1' : '0.45';
+
+        const html = parts.map((key, i) => {
+            const isMain = hasMain && i === parts.length - 1;
+            const cls = isMain ? 'hotkey-chip hotkey-chip-main' : 'hotkey-chip';
+            const sep = i < parts.length - 1 ? '<div class="hotkey-plus">+</div>' : '';
+            return `<div class="${cls}">${escapeHtml(key)}</div>${sep}`;
+        }).join('');
+
+        chipsRow.innerHTML = html;
+    }
+
+    /** Map a browser KeyboardEvent.key value to the string format ParseHotkey expects. */
+    private _mapHkKey(key: string): string {
+        if (key === ' ') return 'Space';
+        if (key === 'Tab') return 'Tab';
+        if (key === 'Enter') return 'Enter';
+        if (key === 'Backspace') return 'Backspace';
+        if (key === 'Delete') return 'Delete';
+        if (key === 'Escape') return 'Escape';
+        if (/^F([1-9]|1[0-2])$/.test(key)) return key;
+        if (/^[a-zA-Z]$/.test(key)) return key.toUpperCase();
+        if (/^[0-9]$/.test(key)) return key;
+        return '';
     }
 
     private _bindTabKeyNav(): void {

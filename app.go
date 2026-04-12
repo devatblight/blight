@@ -429,7 +429,17 @@ func (a *App) SaveSettings(cfg BlightConfig) error {
 	log := debug.Get()
 
 	if cfg.Hotkey != "" {
+		prev := a.config.Hotkey
 		a.config.Hotkey = cfg.Hotkey
+		if a.hotkey != nil && cfg.Hotkey != prev {
+			a.hotkey.Stop()
+			a.hotkey = hotkey.New(cfg.Hotkey, func() { a.ToggleWindow() })
+			if err := a.hotkey.Start(); err != nil {
+				log.Error("hotkey restart failed", map[string]interface{}{"error": err.Error()})
+			} else {
+				log.Info("global hotkey updated", map[string]interface{}{"hotkey": cfg.Hotkey})
+			}
+		}
 	}
 	if cfg.MaxClipboard > 0 {
 		a.config.MaxClipboard = cfg.MaxClipboard

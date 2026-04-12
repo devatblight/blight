@@ -239,7 +239,12 @@
                   <div class="settings-row-desc">Global shortcut to show/hide blight</div>
                 </div>
                 <div class="settings-row-control">
-                  <div class="hotkey-badge" id="settings-hotkey-display">Alt+Space</div>
+                  <button class="hotkey-badge-btn" id="settings-hotkey-edit" title="Click to change hotkey">
+                    <span id="settings-hotkey-display">Alt+Space</span>
+                    <svg class="hotkey-edit-icon" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M9.5 2.5L11.5 4.5L5.5 10.5L3 11L3.5 8.5Z"/>
+                    </svg>
+                  </button>
                 </div>
               </div>
 
@@ -588,6 +593,30 @@
       <div class="settings-footer">
         <button id="settings-cancel" class="settings-btn">Cancel</button>
         <button id="settings-save" class="settings-btn settings-btn-primary">Save Settings</button>
+      </div>
+    </div>
+
+    <!-- Hotkey recorder modal -->
+    <div id="hotkey-modal" class="hotkey-modal hidden" role="dialog" aria-modal="true" aria-label="Set launch hotkey">
+      <div class="hotkey-modal-box">
+        <div class="hotkey-modal-title">Set Launch Hotkey</div>
+        <div class="hotkey-modal-sub">Press your desired key combination below</div>
+        <div class="hotkey-canvas" id="hotkey-canvas" tabindex="0">
+          <span class="hotkey-placeholder" id="hotkey-placeholder">Press a key combination…</span>
+          <div class="hotkey-chips-row" id="hotkey-chips-row"></div>
+        </div>
+        <div class="hotkey-modal-hint">
+          <span>Current:</span>
+          <span id="hotkey-modal-current-val" class="hotkey-modal-current-val"></span>
+          <span class="hotkey-modal-hint-sep">·</span>
+          <span class="hotkey-modal-hint-note">Need at least one modifier (Ctrl, Alt, Shift, Win)</span>
+        </div>
+        <div class="hotkey-modal-actions">
+          <button class="settings-btn" id="hotkey-clear-btn">Clear</button>
+          <div style="flex:1"></div>
+          <button class="settings-btn" id="hotkey-cancel-btn">Cancel</button>
+          <button class="settings-btn settings-btn-primary" id="hotkey-save-btn" disabled>Save</button>
+        </div>
       </div>
     </div>
 
