@@ -3,6 +3,14 @@ import {
     ExecuteContextAction, CheckForUpdates, InstallUpdate,
     GetIcon, GetConfig, GetVersion, GetUsageScores,
 } from '../wailsjs/go/main/App';
+import {
+    provideFluentDesignSystem,
+    fluentButton,
+    fluentSwitch,
+    fluentSelect,
+    fluentOption,
+    fluentTextField,
+} from '@fluentui/web-components';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 import { main, files } from '../wailsjs/go/models';
 
@@ -122,6 +130,23 @@ class Blight {
     // --- Init ---
 
     async init(): Promise<void> {
+        // Detect OS and apply platform attribute for native-feel theming.
+        // WebView2 UA contains "Windows NT"; WebKit on macOS contains "Macintosh".
+        const ua = navigator.userAgent;
+        const os = /Win/i.test(ua) ? 'windows' : /Mac/i.test(ua) ? 'darwin' : 'linux';
+        document.documentElement.dataset.os = os;
+
+        // Register Fluent UI web components on Windows (WinUI3 design tokens).
+        if (os === 'windows') {
+            provideFluentDesignSystem().register(
+                fluentButton(),
+                fluentSwitch(),
+                fluentSelect(),
+                fluentOption(),
+                fluentTextField(),
+            );
+        }
+
         const settingsMode = await IsSettingsMode();
         if (settingsMode) {
             this.settingsMode = true;

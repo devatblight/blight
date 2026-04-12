@@ -15,5 +15,8 @@
     "onlyBuiltDependencies": [
       "esbuild"
     ]
+  },
+  "dependencies": {
+    "@fluentui/web-components": "^2.6.1"
   }
 }
