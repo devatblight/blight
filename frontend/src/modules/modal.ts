@@ -8,9 +8,10 @@ export function showConfirmModal(
     const modal = document.getElementById('confirm-modal')!;
     document.getElementById('confirm-modal-title')!.textContent = title;
     document.getElementById('confirm-modal-body')!.textContent = body;
-    const okBtn = document.getElementById('confirm-modal-ok') as HTMLButtonElement;
+    const okBtn = document.getElementById('confirm-modal-ok') as HTMLElement;
     okBtn.textContent = okLabel;
-    okBtn.className = danger ? 'settings-btn settings-btn-danger' : 'settings-btn settings-btn-primary';
+    okBtn.setAttribute('appearance', danger ? 'neutral' : 'accent');
+    okBtn.classList.toggle('fluent-danger', danger);
     const cancelBtn = document.getElementById('confirm-modal-cancel')!;
     const cleanup = () => {
         modal.classList.add('hidden');

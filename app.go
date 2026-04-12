@@ -95,6 +95,7 @@ type App struct {
 	hotkey       *hotkey.HotkeyManager
 	tray         *tray.TrayIcon
 	visible      atomic.Bool
+	lastShownAt  atomic.Int64 // Unix nanoseconds; updated on every show
 	version      string
 	settingsMode bool // true when running as the --settings child process
 }
@@ -318,6 +319,7 @@ func (a *App) ToggleWindow() {
 	} else {
 		// Reload config so changes saved in the settings window take effect
 		a.loadConfig()
+		a.lastShownAt.Store(time.Now().UnixNano())
 		runtime.WindowShow(a.ctx)
 		runtime.WindowSetAlwaysOnTop(a.ctx, true)
 		runtime.EventsEmit(a.ctx, "windowShown")
@@ -327,6 +329,7 @@ func (a *App) ToggleWindow() {
 
 func (a *App) ShowWindow() {
 	a.loadConfig()
+	a.lastShownAt.Store(time.Now().UnixNano())
 	runtime.WindowShow(a.ctx)
 	runtime.WindowSetAlwaysOnTop(a.ctx, true)
 	runtime.EventsEmit(a.ctx, "windowShown")
@@ -429,7 +432,17 @@ func (a *App) SaveSettings(cfg BlightConfig) error {
 	log := debug.Get()
 
 	if cfg.Hotkey != "" {
+		prev := a.config.Hotkey
 		a.config.Hotkey = cfg.Hotkey
+		if a.hotkey != nil && cfg.Hotkey != prev {
+			a.hotkey.Stop()
+			a.hotkey = hotkey.New(cfg.Hotkey, func() { a.ToggleWindow() })
+			if err := a.hotkey.Start(); err != nil {
+				log.Error("hotkey restart failed", map[string]interface{}{"error": err.Error()})
+			} else {
+				log.Info("global hotkey updated", map[string]interface{}{"hotkey": cfg.Hotkey})
+			}
+		}
 	}
 	if cfg.MaxClipboard > 0 {
 		a.config.MaxClipboard = cfg.MaxClipboard
@@ -928,7 +941,14 @@ func (a *App) GetIcon(path string) string {
 	return apps.GetIconBase64(path)
 }
 
+// HideWindow is called by the frontend blur handler. It ignores the request if
+// the window was shown very recently — this prevents a blur that fires as a
+// side-effect of the hotkey show action from immediately re-hiding the window.
 func (a *App) HideWindow() {
+	const gracePeriod = 600 * time.Millisecond
+	if time.Since(time.Unix(0, a.lastShownAt.Load())) < gracePeriod {
+		return
+	}
 	runtime.WindowHide(a.ctx)
 	a.visible.Store(false)
 }

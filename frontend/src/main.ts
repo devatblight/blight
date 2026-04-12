@@ -3,6 +3,18 @@ import {
     ExecuteContextAction, CheckForUpdates, InstallUpdate,
     GetIcon, GetConfig, GetVersion, GetUsageScores,
 } from '../wailsjs/go/main/App';
+import {
+    provideFluentDesignSystem,
+    fluentButton,
+    fluentSwitch,
+    fluentSelect,
+    fluentOption,
+    fluentTextField,
+    baseLayerLuminance,
+    StandardLuminance,
+    accentBaseColor,
+    SwatchRGB,
+} from '@fluentui/web-components';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 import { main, files } from '../wailsjs/go/models';
 
@@ -106,8 +118,13 @@ class Blight {
             document.getElementById('search-filter-pills')!,
             (filter) => {
                 this.activeFilter = filter;
-                this.filterPills.render(filter);
-                if (this.currentQuery) this.renderResults();
+                if (this.currentQuery) {
+                    this.filterPills.render(filter);
+                    this.renderResults();
+                } else {
+                    // No query — show only the active badge or hide
+                    filter ? this.filterPills.renderActiveOnly() : this.filterPills.hide();
+                }
             }
         );
 
@@ -122,6 +139,30 @@ class Blight {
     // --- Init ---
 
     async init(): Promise<void> {
+        // Detect OS and apply platform attribute for native-feel theming.
+        // WebView2 UA contains "Windows NT"; WebKit on macOS contains "Macintosh".
+        const ua = navigator.userAgent;
+        const os = /Win/i.test(ua) ? 'windows' : /Mac/i.test(ua) ? 'darwin' : 'linux';
+        document.documentElement.dataset.os = os;
+
+        // Initialise the Fluent design system with dark/light mode and accent.
+        // These two tokens drive ALL component colors — no manual color overrides needed.
+        baseLayerLuminance.withDefault(
+            window.matchMedia('(prefers-color-scheme: light)').matches
+                ? StandardLuminance.LightMode
+                : StandardLuminance.DarkMode
+        );
+        // Blight accent: #5C9AFF  → r=0.361 g=0.604 b=1.0
+        accentBaseColor.withDefault(SwatchRGB.create(0.361, 0.604, 1.0));
+
+        provideFluentDesignSystem().register(
+            fluentButton(),
+            fluentSwitch(),
+            fluentSelect(),
+            fluentOption(),
+            fluentTextField(),
+        );
+
         const settingsMode = await IsSettingsMode();
         if (settingsMode) {
             this.settingsMode = true;
@@ -161,7 +202,7 @@ class Blight {
         this.settings.bind();
         this.loadDefaultResults();
         this.loadUsageScores();
-        this.filterPills.render(null);
+        this.filterPills.hide();
         this.checkWhatsNew();
     }
 
@@ -278,7 +319,8 @@ class Blight {
                     this.searchHistory.hide();
                     if (this.activeFilter) {
                         this.activeFilter = null;
-                        this.filterPills.render(null);
+                        this.filterPills.clearFilter();
+                        this.filterPills.hide();
                         this.renderResults();
                     } else if (this.searchInput.value) {
                         this.searchInput.value = '';
@@ -311,6 +353,9 @@ class Blight {
                 this.currentQuery = '';
                 this._displayResults = [];
                 this.loadDefaultResults();
+                this.activeFilter = null;
+                this.filterPills.clearFilter();
+                this.filterPills.hide();
             }
             setTimeout(() => {
                 this.searchInput.focus();
@@ -338,12 +383,18 @@ class Blight {
             this.loadDefaultResults();
             this.calcPreview.clear();
             this.searchHistory.show();
+            // Clear active filter and hide pills when query is emptied
+            this.activeFilter = null;
+            this.filterPills.clearFilter();
+            this.filterPills.hide();
             return;
         }
         this.searchHistory.hide();
         this.launcherEl.classList.remove('spotlight-mode');
         this.setLoading(true);
         this.calcPreview.update(query);
+        // Show filter pills once the user starts typing
+        this.filterPills.render(this.activeFilter);
         this.debounceTimer = setTimeout(async () => {
             const seq = ++this.searchSeq;
             const results = await Search(query);
@@ -501,17 +552,42 @@ class Blight {
         const list = this._displayResults.length > 0 ? this._displayResults : this.results;
         if (list.length === 0) return;
         const items = this.resultsContainer.querySelectorAll<HTMLElement>('.result-item');
-        if (items.length === 0) return;
+        // Guard: DOM might not match list if a re-render is in flight
+        if (items.length === 0 || items.length !== list.length) return;
+
+        // Remove selected from current item
         items[this.selectedIndex]?.classList.remove('selected');
         items[this.selectedIndex]?.setAttribute('aria-selected', 'false');
+
         this.selectedIndex = (this.selectedIndex + delta + list.length) % list.length;
+
         const next = items[this.selectedIndex];
         if (next) {
             next.classList.add('selected');
             next.setAttribute('aria-selected', 'true');
-            next.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            this._scrollItemIntoView(next);
         }
+
+        // Suppress CSS :hover while keyboard-navigating; re-enable on mouse move
+        this.resultsContainer.classList.add('keyboard-nav');
+
         this.updateFooterHints(list[this.selectedIndex] ?? null);
+    }
+
+    /** Scroll the item into view without smooth animation (avoids queued-scroll
+     *  jumps when the user holds down an arrow key). */
+    private _scrollItemIntoView(item: HTMLElement): void {
+        const container = this.resultsContainer;
+        const containerTop = container.scrollTop;
+        const containerBottom = containerTop + container.clientHeight;
+        const itemTop = item.offsetTop;
+        const itemBottom = itemTop + item.offsetHeight;
+
+        if (itemBottom > containerBottom) {
+            container.scrollTop = itemBottom - container.clientHeight + 4;
+        } else if (itemTop < containerTop) {
+            container.scrollTop = itemTop - 4;
+        }
     }
 
     async executeSelected(): Promise<void> {

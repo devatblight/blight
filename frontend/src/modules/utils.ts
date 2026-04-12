@@ -35,10 +35,16 @@ export function highlightMatch(text: string, query: string): string {
 
 export function inputEl(id: string): HTMLInputElement | null {
     const el = document.getElementById(id);
-    return el instanceof HTMLInputElement ? el : null;
+    if (el instanceof HTMLInputElement) return el;
+    // fluent-switch and fluent-text-field expose .checked / .value like native inputs
+    if (el?.tagName.toLowerCase().startsWith('fluent-')) return el as unknown as HTMLInputElement;
+    return null;
 }
 
 export function selectEl(id: string): HTMLSelectElement | null {
     const el = document.getElementById(id);
-    return el instanceof HTMLSelectElement ? el : null;
+    if (el instanceof HTMLSelectElement) return el;
+    // fluent-select exposes .value like a native select
+    if (el?.tagName.toLowerCase().startsWith('fluent-')) return el as unknown as HTMLSelectElement;
+    return null;
 }

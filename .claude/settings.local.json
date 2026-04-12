@@ -32,7 +32,16 @@
       "Bash(/mnt/c/Users/Bluejutzu/go/bin/wails.exe version:*)",
       "Read(//usr/local/go/**)",
       "Read(//usr/**)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(python3:*)",
+      "Bash(/mnt/c/Users/Bluejutzu/go/bin/go.exe build:*)",
+      "Bash(pnpm add:*)",
+      "Bash(pnpm install:*)",
+      "Bash(CI=true pnpm install)"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "ChunkHound"
+  ]
 }

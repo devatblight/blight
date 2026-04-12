@@ -1291,6 +1291,166 @@ body.settings-only .settings-panel {
     justify-content: flex-end;
 }
 
+/* === Hotkey recorder modal === */
+
+.hotkey-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 9100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.60);
+    animation: fadeIn 120ms ease forwards;
+}
+
+.hotkey-modal.hidden { display: none; }
+
+.hotkey-modal-box {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    padding: 22px 24px 20px;
+    width: 360px;
+    box-shadow: var(--shadow-context);
+    animation: scaleIn 120ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.hotkey-modal-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 3px;
+}
+
+.hotkey-modal-sub {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    margin-bottom: 14px;
+}
+
+.hotkey-canvas {
+    background: var(--bg-primary);
+    border: 1.5px dashed var(--border-strong);
+    border-radius: var(--radius-md);
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 10px;
+    cursor: default;
+    outline: none;
+    transition: border-color 100ms ease, border-style 100ms ease;
+    user-select: none;
+}
+
+.hotkey-canvas:focus,
+.hotkey-canvas.hk-active {
+    border-color: var(--accent);
+    border-style: solid;
+}
+
+.hotkey-placeholder {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    pointer-events: none;
+}
+
+.hotkey-chips-row {
+    display: none;
+    align-items: center;
+    gap: 5px;
+    transition: opacity 80ms ease;
+}
+
+.hotkey-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 11px;
+    min-width: 34px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: var(--font);
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-strong);
+    box-shadow: 0 1px 0 var(--border-strong);
+    color: var(--text-primary);
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.hotkey-chip-main {
+    background: var(--accent-soft);
+    border-color: var(--border-focus);
+    box-shadow: 0 1px 0 var(--border-focus);
+    color: var(--accent);
+}
+
+.hotkey-plus {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    font-weight: 500;
+}
+
+.hotkey-modal-hint {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.hotkey-modal-current-val {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.hotkey-modal-hint-sep {
+    opacity: 0.4;
+}
+
+.hotkey-modal-hint-note {
+    color: var(--text-tertiary);
+    opacity: 0.75;
+}
+
+.hotkey-modal-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Clickable badge button in settings row */
+.hotkey-badge-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border: 1px solid var(--border-focus);
+    border-radius: var(--radius-sm);
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    font-family: var(--font);
+    transition: filter var(--transition-fast);
+}
+
+.hotkey-badge-btn:hover { filter: brightness(1.12); }
+
+.hotkey-edit-icon {
+    width: 11px;
+    height: 11px;
+    opacity: 0.65;
+    flex-shrink: 0;
+}
+
 /* === Progress bar === */
 
 .progress-bar {
@@ -1373,35 +1533,59 @@ html.no-animations *::after {
 
 .search-filter-pills {
     display: flex;
-    gap: 4px;
+    gap: 3px;
     flex-shrink: 0;
+    /* Hidden by default — slide in when .visible is added */
+    max-width: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: max-width 180ms cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 140ms ease;
+    pointer-events: none;
+}
+
+.search-filter-pills.visible {
+    max-width: 280px;
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* When only the active filter badge is shown, give it a bit more room */
+.search-filter-pills.active-only {
+    max-width: 100px;
 }
 
 .filter-pill {
     font-size: 10px;
-    font-weight: 600;
-    padding: 2px 7px;
+    font-weight: 500;
+    padding: 2px 8px;
     border-radius: 9999px;
-    border: 1px solid var(--border);
-    background: var(--bg-secondary);
+    border: 1px solid transparent;
+    background: var(--bg-hover);
     color: var(--text-tertiary);
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: background var(--transition-fast), color var(--transition-fast),
+                border-color var(--transition-fast);
     user-select: none;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .filter-pill:hover {
-    background: var(--bg-hover);
+    background: var(--bg-selected);
     color: var(--text-secondary);
-    border-color: var(--border-strong);
 }
 
 .filter-pill.active {
     background: var(--accent-soft);
     color: var(--accent);
     border-color: var(--border-focus);
+}
+
+/* The compact "active filter" badge shown when query is cleared */
+.filter-pill-active-badge {
+    font-size: 10px;
+    letter-spacing: 0;
 }
 
 /* === Search History Dropdown === */
@@ -1657,4 +1841,355 @@ html.no-animations *::after {
         --shadow-window:  0 0 0 1px rgba(0,0,0,0.08), 0 32px 80px rgba(0,0,0,0.20);
         --shadow-context: 0 0 0 1px rgba(0,0,0,0.08), 0 8px 24px rgba(0,0,0,0.15);
     }
+}
+
+/* ============================================================
+   FLUENT WEB COMPONENTS — cross-platform baseline
+   Styles applied via ::part() so they work regardless of OS.
+   Design tokens (--accent, --bg-*, --text-*, --radius-*) are
+   inherited from the surrounding CSS variables.
+   ============================================================ */
+
+/* --- fluent-button ---
+   Colors come from the Fluent design token system (set in main.ts via
+   baseLayerLuminance + accentBaseColor). We only override geometry here. */
+
+fluent-button {
+    display: inline-flex;
+    align-items: center;
+}
+
+fluent-button.hidden { display: none; }
+
+fluent-button::part(control) {
+    font-family: var(--font);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 4px 12px;
+    min-height: 28px;
+    height: auto;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    white-space: nowrap;
+    letter-spacing: 0;
+}
+
+/* danger modifier — only override text color, keep Fluent surface colors */
+fluent-button.fluent-danger::part(control) {
+    color: #f87171;
+}
+
+fluent-button.fluent-danger:hover::part(control) {
+    color: #fca5a5;
+}
+
+/* --- fluent-switch ---
+   Colors driven by Fluent tokens. We only override size/shape. */
+
+fluent-switch {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+fluent-switch::part(label) {
+    display: none;
+}
+
+fluent-switch::part(switch) {
+    width: 36px;
+    height: 20px;
+    border-radius: 10px;
+}
+
+fluent-switch::part(checked-indicator) {
+    border-radius: 50%;
+}
+
+/* ============================================================
+   WINDOWS 11 — Fluent Design System
+   Mica backdrop (main.go) sits behind the WebView.
+   Only the launcher chrome is translucent — overlays/panels
+   stay opaque so they don't double-stack transparency.
+   Interactive controls use Fluent web-components (see main.ts).
+   ============================================================ */
+
+[data-os="windows"] {
+    /* Win11 uses tighter radii */
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+
+    /* Fluent border tokens */
+    --border:        rgba(255, 255, 255, 0.07);
+    --border-strong: rgba(255, 255, 255, 0.10);
+    --border-focus:  rgba(92, 154, 255, 0.70);
+
+    /* Fluent shadow (Mica provides the depth, so shadows are lighter) */
+    --shadow-window:  0 0 0 1px rgba(255,255,255,0.07), 0 8px 32px rgba(0,0,0,0.55);
+    --shadow-context: 0 0 0 1px rgba(255,255,255,0.07), 0 4px 16px rgba(0,0,0,0.50);
+}
+
+/* Launcher chrome: semi-transparent so Mica bleeds through */
+[data-os="windows"] .launcher {
+    background: rgba(28, 28, 30, 0.72);
+    border-color: rgba(255, 255, 255, 0.06);
+}
+
+/* Splash: same Mica-aware transparency */
+[data-os="windows"] .splash {
+    background: rgba(28, 28, 30, 0.82);
+}
+
+/* Settings panel: OPAQUE — it is a full overlay and must be readable */
+[data-os="windows"] .settings-panel {
+    background: #202022;
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-os="windows"] .settings-nav {
+    background: #1a1a1c;
+    border-right-color: rgba(255, 255, 255, 0.06);
+}
+
+[data-os="windows"] .settings-header {
+    background: #1a1a1c;
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+[data-os="windows"] .settings-footer {
+    background: #1a1a1c;
+    border-top-color: rgba(255, 255, 255, 0.06);
+}
+
+/* Context menu: acrylic blur (floating menus use acrylic in Win11) */
+[data-os="windows"] .context-menu {
+    background: rgba(36, 36, 38, 0.90);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Confirm modal overlay */
+[data-os="windows"] .confirm-modal-box,
+[data-os="windows"] .hotkey-modal-box {
+    background: #252527;
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* --- Fluent focus rings (Win11: 2px solid, 2px offset) --- */
+
+[data-os="windows"] button:focus-visible,
+[data-os="windows"] input:focus-visible,
+[data-os="windows"] select:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+[data-os="windows"] .settings-input:focus,
+[data-os="windows"] .settings-select:focus {
+    border-color: var(--accent);
+    outline: none;
+}
+
+/* --- Fluent nav items --- */
+
+[data-os="windows"] .settings-nav-item {
+    border-radius: var(--radius-sm);
+    margin: 0 4px;
+    width: calc(100% - 8px);
+}
+
+[data-os="windows"] .settings-nav-item.active {
+    background: rgba(92, 154, 255, 0.14);
+    border-radius: var(--radius-sm);
+}
+
+/* --- Fluent Toggle (WinUI3 ToggleSwitch) ---
+   Off state: transparent fill, visible border.
+   On state: solid accent. Thumb: white circle. */
+
+[data-os="windows"] .settings-toggle-track {
+    background: transparent;
+    border: 2px solid rgba(255, 255, 255, 0.45);
+    border-radius: 10px;
+}
+
+[data-os="windows"] .settings-toggle-track::after {
+    background: rgba(255, 255, 255, 0.70);
+    width: 12px;
+    height: 12px;
+    left: 1px;
+}
+
+[data-os="windows"] .settings-toggle input:checked + .settings-toggle-track {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+[data-os="windows"] .settings-toggle input:checked + .settings-toggle-track::after {
+    background: #fff;
+    transform: translateX(16px) translateY(-50%);
+}
+
+/* --- Fluent Scrollbar --- */
+
+[data-os="windows"] .results-container::-webkit-scrollbar,
+[data-os="windows"] .settings-body::-webkit-scrollbar { width: 2px; }
+
+[data-os="windows"] .results-container::-webkit-scrollbar-thumb,
+[data-os="windows"] .settings-body::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.14);
+    border-radius: 1px;
+}
+
+/* --- Splash button --- */
+[data-os="windows"] .splash-btn-primary {
+    border-radius: var(--radius-sm);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.30);
+}
+
+/* ============================================================
+   macOS — Apple Human Interface Guidelines
+   WindowIsTranslucent → NSVisualEffectView vibrancy.
+   Surfaces are semi-transparent; controls follow HIG.
+   ============================================================ */
+
+[data-os="darwin"] {
+    --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', system-ui, sans-serif;
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --shadow-window:  0 0 0 1px rgba(255,255,255,0.10), 0 20px 60px rgba(0,0,0,0.70);
+    --shadow-context: 0 0 0 1px rgba(255,255,255,0.10), 0 8px 20px rgba(0,0,0,0.55);
+}
+
+/* Launcher chrome: vibrancy-transparent */
+[data-os="darwin"] .launcher {
+    background: rgba(28, 28, 30, 0.76);
+}
+
+/* Settings panel: opaque — same rule as Windows */
+[data-os="darwin"] .settings-panel {
+    background: #1e1e20;
+}
+
+[data-os="darwin"] .settings-nav {
+    background: #191919;
+}
+
+[data-os="darwin"] .settings-header,
+[data-os="darwin"] .settings-footer {
+    background: #191919;
+}
+
+/* Context menu: NSMenu-style blur */
+[data-os="darwin"] .context-menu {
+    background: rgba(40, 40, 42, 0.88);
+    backdrop-filter: blur(32px) saturate(200%);
+    -webkit-backdrop-filter: blur(32px) saturate(200%);
+    border-color: rgba(255, 255, 255, 0.10);
+}
+
+/* macOS buttons */
+[data-os="darwin"] .settings-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+}
+
+[data-os="darwin"] .settings-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.16);
+    color: var(--text-primary);
+}
+
+[data-os="darwin"] .settings-btn:active {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+[data-os="darwin"] .settings-btn-primary {
+    background: var(--accent);
+    border-color: transparent;
+    color: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.40);
+}
+
+[data-os="darwin"] .settings-btn-primary:hover {
+    filter: brightness(1.08);
+}
+
+/* macOS focus ring — glow, no hard outline */
+[data-os="darwin"] button:focus-visible,
+[data-os="darwin"] input:focus-visible,
+[data-os="darwin"] select:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(92, 154, 255, 0.45);
+}
+
+[data-os="darwin"] .settings-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(92, 154, 255, 0.25);
+    outline: none;
+}
+
+[data-os="darwin"] .settings-select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(92, 154, 255, 0.25);
+    outline: none;
+}
+
+/* macOS Toggle — wider pill, drop shadow on thumb */
+[data-os="darwin"] .settings-toggle { width: 38px; height: 22px; }
+
+[data-os="darwin"] .settings-toggle-track {
+    border-radius: 11px;
+    background: rgba(255, 255, 255, 0.14);
+    border-color: transparent;
+}
+
+[data-os="darwin"] .settings-toggle-track::after {
+    width: 16px;
+    height: 16px;
+    top: 3px;
+    left: 3px;
+    transform: none;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.40);
+}
+
+[data-os="darwin"] .settings-toggle input:checked + .settings-toggle-track {
+    background: var(--accent);
+    border-color: transparent;
+}
+
+[data-os="darwin"] .settings-toggle input:checked + .settings-toggle-track::after {
+    transform: translateX(16px);
+}
+
+/* macOS nav */
+[data-os="darwin"] .settings-nav-item {
+    border-radius: var(--radius-sm);
+    margin: 0 4px;
+    width: calc(100% - 8px);
+}
+
+[data-os="darwin"] .settings-nav-item.active {
+    background: rgba(92, 154, 255, 0.14);
+}
+
+/* macOS scrollbar */
+[data-os="darwin"] .results-container::-webkit-scrollbar,
+[data-os="darwin"] .settings-body::-webkit-scrollbar { width: 4px; }
+
+[data-os="darwin"] .results-container::-webkit-scrollbar-thumb,
+[data-os="darwin"] .settings-body::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.18);
+    border-radius: 4px;
+}
+
+[data-os="darwin"] .splash-btn-primary {
+    border-radius: var(--radius-md);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.30);
 }

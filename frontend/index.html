@@ -239,7 +239,12 @@
                   <div class="settings-row-desc">Global shortcut to show/hide blight</div>
                 </div>
                 <div class="settings-row-control">
-                  <div class="hotkey-badge" id="settings-hotkey-display">Alt+Space</div>
+                  <button class="hotkey-badge-btn" id="settings-hotkey-edit" title="Click to change hotkey">
+                    <span id="settings-hotkey-display">Alt+Space</span>
+                    <svg class="hotkey-edit-icon" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M9.5 2.5L11.5 4.5L5.5 10.5L3 11L3.5 8.5Z"/>
+                    </svg>
+                  </button>
                 </div>
               </div>
 
@@ -262,10 +267,7 @@
                   <div class="settings-row-desc">Close blight when it loses focus</div>
                 </div>
                 <div class="settings-row-control">
-                  <label class="settings-toggle">
-                    <input type="checkbox" id="settings-hide-deactivated" checked />
-                    <span class="settings-toggle-track"></span>
-                  </label>
+                  <fluent-switch id="settings-hide-deactivated" checked></fluent-switch>
                 </div>
               </div>
 
@@ -342,10 +344,7 @@
                   <div class="settings-row-desc">Display placeholder text in the search input</div>
                 </div>
                 <div class="settings-row-control">
-                  <label class="settings-toggle">
-                    <input type="checkbox" id="settings-show-placeholder" checked />
-                    <span class="settings-toggle-track"></span>
-                  </label>
+                  <fluent-switch id="settings-show-placeholder" checked></fluent-switch>
                 </div>
               </div>
             </div>
@@ -380,10 +379,7 @@
                   <div class="settings-row-desc">Smooth transitions and scale animations</div>
                 </div>
                 <div class="settings-row-control">
-                  <label class="settings-toggle">
-                    <input type="checkbox" id="settings-use-animation" checked />
-                    <span class="settings-toggle-track"></span>
-                  </label>
+                  <fluent-switch id="settings-use-animation" checked></fluent-switch>
                 </div>
               </div>
             </div>
@@ -400,10 +396,7 @@
                   <div class="settings-row-desc">Launch blight automatically when Windows starts</div>
                 </div>
                 <div class="settings-row-control">
-                  <label class="settings-toggle">
-                    <input type="checkbox" id="settings-start-on-startup" />
-                    <span class="settings-toggle-track"></span>
-                  </label>
+                  <fluent-switch id="settings-start-on-startup"></fluent-switch>
                 </div>
               </div>
 
@@ -413,10 +406,7 @@
                   <div class="settings-row-desc">Remove blight from the system tray (use hotkey to open)</div>
                 </div>
                 <div class="settings-row-control">
-                  <label class="settings-toggle">
-                    <input type="checkbox" id="settings-hide-notify-icon" />
-                    <span class="settings-toggle-track"></span>
-                  </label>
+                  <fluent-switch id="settings-hide-notify-icon"></fluent-switch>
                 </div>
               </div>
             </div>
@@ -433,9 +423,9 @@
                   <div id="settings-index-status" class="settings-row-desc">—</div>
                 </div>
                 <div class="settings-row-control">
-                  <button id="settings-reindex" class="settings-btn">Reindex</button>
-                  <button id="settings-cancel-index" class="settings-btn hidden">Cancel</button>
-                  <button id="settings-clear-index" class="settings-btn settings-btn-danger">Clear</button>
+                  <fluent-button id="settings-reindex" appearance="neutral">Reindex</fluent-button>
+                  <fluent-button id="settings-cancel-index" appearance="neutral" class="hidden">Cancel</fluent-button>
+                  <fluent-button id="settings-clear-index" appearance="neutral" class="fluent-danger">Clear</fluent-button>
                 </div>
               </div>
 
@@ -445,10 +435,7 @@
                   <div class="settings-row-desc">Show matching directories alongside files when searching</div>
                 </div>
                 <div class="settings-row-control">
-                  <label class="settings-toggle">
-                    <input type="checkbox" id="settings-include-folders" checked />
-                    <span class="settings-toggle-track"></span>
-                  </label>
+                  <fluent-switch id="settings-include-folders" checked></fluent-switch>
                 </div>
               </div>
 
@@ -458,7 +445,7 @@
                   <div class="settings-row-desc">Additional folders to include in the file index</div>
                 </div>
                 <div id="settings-index-dirs" class="settings-dirs-list"></div>
-                <button id="settings-add-dir" class="settings-btn settings-btn-add">+ Add Directory</button>
+                <fluent-button id="settings-add-dir" appearance="accent">+ Add Directory</fluent-button>
               </div>
             </div>
           </div>
@@ -477,7 +464,7 @@
                   <input id="alias-trigger-input" class="settings-input" type="text" maxlength="32" placeholder="trigger" title="Keyword to type in the launcher" />
                   <span class="settings-input-unit">→</span>
                   <input id="alias-expansion-input" class="settings-input settings-input-wide" type="text" placeholder="URL or text snippet" title="What happens when you use the alias: URL opens in browser, text is copied" />
-                  <button id="alias-add-btn" class="settings-btn settings-btn-primary">Add</button>
+                  <fluent-button id="alias-add-btn" appearance="accent">Add</fluent-button>
                 </div>
               </div>
 
@@ -496,7 +483,7 @@
                   <div id="settings-version" class="settings-row-desc"></div>
                 </div>
                 <div class="settings-row-control">
-                  <button id="settings-check-updates" class="settings-btn">Check for Updates</button>
+                  <fluent-button id="settings-check-updates" appearance="neutral">Check for Updates</fluent-button>
                 </div>
               </div>
               <div id="settings-update-status" class="settings-update-status"></div>
@@ -510,7 +497,7 @@
                   <div class="progress-text" id="settings-update-progress-text"></div>
                 </div>
                 <div class="settings-row-control">
-                  <button id="settings-install-update" class="settings-btn settings-btn-primary">Install</button>
+                  <fluent-button id="settings-install-update" appearance="accent">Install</fluent-button>
                 </div>
               </div>
             </div>
@@ -527,7 +514,7 @@
                   <div id="misc-data-dir" class="settings-row-desc settings-dir-path" style="font-size:11px;word-break:break-all"></div>
                 </div>
                 <div class="settings-row-control">
-                  <button id="misc-open-data" class="settings-btn">Open</button>
+                  <fluent-button id="misc-open-data" appearance="neutral">Open</fluent-button>
                 </div>
               </div>
 
@@ -537,7 +524,7 @@
                   <div id="misc-install-dir" class="settings-row-desc settings-dir-path" style="font-size:11px;word-break:break-all"></div>
                 </div>
                 <div class="settings-row-control">
-                  <button id="misc-open-install" class="settings-btn">Open</button>
+                  <fluent-button id="misc-open-install" appearance="neutral">Open</fluent-button>
                 </div>
               </div>
             </div>
@@ -551,7 +538,7 @@
                   <div class="settings-row-desc">Save your current configuration to a JSON file</div>
                 </div>
                 <div class="settings-row-control">
-                  <button id="misc-export-settings" class="settings-btn">Export</button>
+                  <fluent-button id="misc-export-settings" appearance="neutral">Export</fluent-button>
                 </div>
               </div>
 
@@ -561,7 +548,7 @@
                   <div class="settings-row-desc">Restore configuration from a JSON export</div>
                 </div>
                 <div class="settings-row-control">
-                  <button id="misc-import-settings" class="settings-btn">Import</button>
+                  <fluent-button id="misc-import-settings" appearance="neutral">Import</fluent-button>
                   <input id="misc-import-file" type="file" accept=".json" style="display:none" />
                 </div>
               </div>
@@ -576,7 +563,7 @@
                   <div class="settings-row-desc">Permanently remove blight from your system</div>
                 </div>
                 <div class="settings-row-control">
-                  <button id="misc-uninstall" class="settings-btn settings-btn-danger">Uninstall</button>
+                  <fluent-button id="misc-uninstall" appearance="neutral" class="fluent-danger">Uninstall</fluent-button>
                 </div>
               </div>
             </div>
@@ -586,8 +573,32 @@
       </div>
 
       <div class="settings-footer">
-        <button id="settings-cancel" class="settings-btn">Cancel</button>
-        <button id="settings-save" class="settings-btn settings-btn-primary">Save Settings</button>
+        <fluent-button id="settings-cancel" appearance="neutral">Cancel</fluent-button>
+        <fluent-button id="settings-save" appearance="accent">Save Settings</fluent-button>
+      </div>
+    </div>
+
+    <!-- Hotkey recorder modal -->
+    <div id="hotkey-modal" class="hotkey-modal hidden" role="dialog" aria-modal="true" aria-label="Set launch hotkey">
+      <div class="hotkey-modal-box">
+        <div class="hotkey-modal-title">Set Launch Hotkey</div>
+        <div class="hotkey-modal-sub">Press your desired key combination below</div>
+        <div class="hotkey-canvas" id="hotkey-canvas" tabindex="0">
+          <span class="hotkey-placeholder" id="hotkey-placeholder">Press a key combination…</span>
+          <div class="hotkey-chips-row" id="hotkey-chips-row"></div>
+        </div>
+        <div class="hotkey-modal-hint">
+          <span>Current:</span>
+          <span id="hotkey-modal-current-val" class="hotkey-modal-current-val"></span>
+          <span class="hotkey-modal-hint-sep">·</span>
+          <span class="hotkey-modal-hint-note">Need at least one modifier (Ctrl, Alt, Shift, Win)</span>
+        </div>
+        <div class="hotkey-modal-actions">
+          <button class="settings-btn" id="hotkey-clear-btn">Clear</button>
+          <div style="flex:1"></div>
+          <button class="settings-btn" id="hotkey-cancel-btn">Cancel</button>
+          <button class="settings-btn settings-btn-primary" id="hotkey-save-btn" disabled>Save</button>
+        </div>
       </div>
     </div>
 
@@ -597,8 +608,8 @@
         <div class="confirm-modal-title" id="confirm-modal-title"></div>
         <div class="confirm-modal-body" id="confirm-modal-body"></div>
         <div class="confirm-modal-actions">
-          <button id="confirm-modal-cancel" class="settings-btn">Cancel</button>
-          <button id="confirm-modal-ok" class="settings-btn settings-btn-danger">Confirm</button>
+          <fluent-button id="confirm-modal-cancel" appearance="neutral">Cancel</fluent-button>
+          <fluent-button id="confirm-modal-ok" appearance="neutral" class="fluent-danger">Confirm</fluent-button>
         </div>
       </div>
     </div>
