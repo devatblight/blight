@@ -1291,6 +1291,166 @@ body.settings-only .settings-panel {
     justify-content: flex-end;
 }
 
+/* === Hotkey recorder modal === */
+
+.hotkey-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 9100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.60);
+    animation: fadeIn 120ms ease forwards;
+}
+
+.hotkey-modal.hidden { display: none; }
+
+.hotkey-modal-box {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    padding: 22px 24px 20px;
+    width: 360px;
+    box-shadow: var(--shadow-context);
+    animation: scaleIn 120ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.hotkey-modal-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 3px;
+}
+
+.hotkey-modal-sub {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    margin-bottom: 14px;
+}
+
+.hotkey-canvas {
+    background: var(--bg-primary);
+    border: 1.5px dashed var(--border-strong);
+    border-radius: var(--radius-md);
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 10px;
+    cursor: default;
+    outline: none;
+    transition: border-color 100ms ease, border-style 100ms ease;
+    user-select: none;
+}
+
+.hotkey-canvas:focus,
+.hotkey-canvas.hk-active {
+    border-color: var(--accent);
+    border-style: solid;
+}
+
+.hotkey-placeholder {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    pointer-events: none;
+}
+
+.hotkey-chips-row {
+    display: none;
+    align-items: center;
+    gap: 5px;
+    transition: opacity 80ms ease;
+}
+
+.hotkey-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 11px;
+    min-width: 34px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: var(--font);
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-strong);
+    box-shadow: 0 1px 0 var(--border-strong);
+    color: var(--text-primary);
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.hotkey-chip-main {
+    background: var(--accent-soft);
+    border-color: var(--border-focus);
+    box-shadow: 0 1px 0 var(--border-focus);
+    color: var(--accent);
+}
+
+.hotkey-plus {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    font-weight: 500;
+}
+
+.hotkey-modal-hint {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.hotkey-modal-current-val {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.hotkey-modal-hint-sep {
+    opacity: 0.4;
+}
+
+.hotkey-modal-hint-note {
+    color: var(--text-tertiary);
+    opacity: 0.75;
+}
+
+.hotkey-modal-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Clickable badge button in settings row */
+.hotkey-badge-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border: 1px solid var(--border-focus);
+    border-radius: var(--radius-sm);
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    font-family: var(--font);
+    transition: filter var(--transition-fast);
+}
+
+.hotkey-badge-btn:hover { filter: brightness(1.12); }
+
+.hotkey-edit-icon {
+    width: 11px;
+    height: 11px;
+    opacity: 0.65;
+    flex-shrink: 0;
+}
+
 /* === Progress bar === */
 
 .progress-bar {
