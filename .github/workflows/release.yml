@@ -8,7 +8,7 @@ on:
 
 jobs:
   check-version:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     outputs:
       should_release: ${{ steps.check.outputs.should_release }}
       version: ${{ steps.check.outputs.version }}
@@ -61,7 +61,7 @@ jobs:
         include:
           - os: windows-latest
             artifact_name: blight-windows-amd64-setup
-            artifact_path: blight-windows-amd64-setup.exe
+            artifact_path: blacksmith-4vcpu-windows-2025
           - os: ubuntu-latest
             artifact_name: blight-linux-amd64-tar-gz
             artifact_path: blight-linux-amd64.tar.gz
@@ -150,7 +150,7 @@ jobs:
 
   release:
     needs: [check-version, build]
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: write
     steps:
