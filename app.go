@@ -1378,7 +1378,3 @@ func isAbsPath(s string) bool {
 	return false
 }
 
-// isFilePath is kept for backward compatibility; delegates to isAbsPath.
-func isFilePath(s string) bool {
-	return isAbsPath(s)
-}

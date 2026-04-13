@@ -32,8 +32,8 @@ func TestIsCalcQuery(t *testing.T) {
 		{"hello", false},
 		{"", false},
 		{"a", false},
-		{"12", false},   // digit but no operator
-		{"+-*", false},  // operators but no digit
+		{"12", false},  // digit but no operator
+		{"+-*", false}, // operators but no digit
 	}
 	for _, tt := range tests {
 		result := IsCalcQuery(tt.input)
