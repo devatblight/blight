@@ -1,17 +1,17 @@
 // Segoe Fluent Icons / Segoe MDL2 Assets glyph map — Windows only (PUA codepoints).
 // On non-Windows these are invisible (.win-icon is display:none via CSS).
 const CATEGORY_ICONS: Record<string, { glyph: string; color: string }> = {
-    pinned:       { glyph: '\uE718', color: 'rgba(92,154,255,0.75)' },  // Pin
-    applications: { glyph: '\uE737', color: 'rgba(92,154,255,0.70)' },  // Apps
-    recent:       { glyph: '\uE81C', color: 'rgba(92,154,255,0.65)' },  // History
-    suggested:    { glyph: '\uE737', color: 'rgba(92,154,255,0.65)' },  // Apps
-    folders:      { glyph: '\uE8B7', color: 'rgba(255,190,60,0.80)'  }, // OpenFolderHorizontal
-    files:        { glyph: '\uE8A5', color: 'rgba(255,255,255,0.55)' }, // Document
-    web:          { glyph: '\uE774', color: 'rgba(92,154,255,0.70)'  }, // Globe2
-    system:       { glyph: '\uE770', color: 'rgba(255,255,255,0.50)' }, // System/PC
-    calculator:   { glyph: '\uE8EF', color: 'rgba(92,154,255,0.70)'  }, // Calculator
-    clipboard:    { glyph: '\uE8C8', color: 'rgba(255,255,255,0.50)' }, // Copy/Clipboard
-    aliases:      { glyph: '\uE71B', color: 'rgba(92,154,255,0.70)'  }, // Link
+    pinned: { glyph: '\uE718', color: 'rgba(92,154,255,0.75)' }, // Pin
+    applications: { glyph: '\uE737', color: 'rgba(92,154,255,0.70)' }, // Apps
+    recent: { glyph: '\uE81C', color: 'rgba(92,154,255,0.65)' }, // History
+    suggested: { glyph: '\uE737', color: 'rgba(92,154,255,0.65)' }, // Apps
+    folders: { glyph: '\uE8B7', color: 'rgba(255,190,60,0.80)' }, // OpenFolderHorizontal
+    files: { glyph: '\uE8A5', color: 'rgba(255,255,255,0.55)' }, // Document
+    web: { glyph: '\uE774', color: 'rgba(92,154,255,0.70)' }, // Globe2
+    system: { glyph: '\uE770', color: 'rgba(255,255,255,0.50)' }, // System/PC
+    calculator: { glyph: '\uE8EF', color: 'rgba(92,154,255,0.70)' }, // Calculator
+    clipboard: { glyph: '\uE8C8', color: 'rgba(255,255,255,0.50)' }, // Copy/Clipboard
+    aliases: { glyph: '\uE71B', color: 'rgba(92,154,255,0.70)' }, // Link
 };
 
 const DEFAULT_ICON = { glyph: '\uE8D5', color: 'rgba(255,255,255,0.35)' }; // BulletedList

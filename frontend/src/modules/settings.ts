@@ -396,7 +396,9 @@ export class Settings {
         const row = document.getElementById('settings-update-install-row');
         const label = document.getElementById('settings-update-version-label');
         const notesEl = document.getElementById('settings-update-notes');
-        const githubLink = document.getElementById('settings-update-github-link') as HTMLAnchorElement | null;
+        const githubLink = document.getElementById(
+            'settings-update-github-link'
+        ) as HTMLAnchorElement | null;
         const installBtn = document.getElementById(
             'settings-install-update'
         ) as HTMLButtonElement | null;
