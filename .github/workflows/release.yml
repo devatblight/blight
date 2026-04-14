@@ -61,7 +61,7 @@ jobs:
         include:
           - os: windows-latest
             artifact_name: blight-windows-amd64-setup
-            artifact_path: blacksmith-4vcpu-windows-2025
+            artifact_path: blight-windows-amd64-setup.exe
           - os: ubuntu-latest
             artifact_name: blight-linux-amd64-tar-gz
             artifact_path: blight-linux-amd64.tar.gz
