@@ -11,7 +11,7 @@ export function ClearIndex():Promise<void>;
 
 export function CloseSettings():Promise<void>;
 
-export function CompleteOnboarding(arg1:string, arg2:string, arg3:boolean):Promise<void>;
+export function CompleteOnboarding(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 
 export function DeleteAlias(arg1:string):Promise<void>;
 
@@ -53,11 +53,11 @@ export function IsSettingsMode():Promise<boolean>;
 
 export function OpenFolder(arg1:string):Promise<void>;
 
-export function OpenURL(arg1:string):Promise<void>;
-
 export function OpenFolderPicker():Promise<string>;
 
 export function OpenSettingsWindow():Promise<void>;
+
+export function OpenURL(arg1:string):Promise<void>;
 
 export function RefreshApps():Promise<void>;
 

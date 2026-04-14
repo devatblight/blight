@@ -40,6 +40,16 @@ import { CalcPreview } from './modules/calc-preview';
 import { FilterPills } from './modules/filter-pills';
 import { SystemNotifications } from './modules/system-notifs';
 
+export function applyTheme(theme: string): void {
+    document.documentElement.dataset['theme'] = theme;
+    const isLight =
+        theme === 'light' ||
+        (theme === 'system' && window.matchMedia('(prefers-color-scheme: light)').matches);
+    baseLayerLuminance.withDefault(
+        isLight ? StandardLuminance.LightMode : StandardLuminance.DarkMode
+    );
+}
+
 class Blight {
     // Search state
     private selectedIndex = 0;
@@ -163,11 +173,7 @@ class Blight {
 
         // Initialise the Fluent design system with dark/light mode and accent.
         // These two tokens drive ALL component colors — no manual color overrides needed.
-        baseLayerLuminance.withDefault(
-            window.matchMedia('(prefers-color-scheme: light)').matches
-                ? StandardLuminance.LightMode
-                : StandardLuminance.DarkMode
-        );
+        applyTheme(document.documentElement.dataset['theme'] || 'dark');
         // Blight accent: #5C9AFF  → r=0.361 g=0.604 b=1.0
         accentBaseColor.withDefault(SwatchRGB.create(0.361, 0.604, 1.0));
 
@@ -297,7 +303,7 @@ class Blight {
         }
 
         document.documentElement.classList.toggle('no-animations', !cfg.useAnimation);
-        document.documentElement.dataset['theme'] = cfg.theme || 'dark';
+        applyTheme(cfg.theme || 'dark');
 
         this.footerHintsMode = cfg.footerHints || 'always';
         const inSearch = !this.launcherEl.classList.contains('spotlight-mode');

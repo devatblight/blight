@@ -582,7 +582,7 @@ export class Settings {
     private _openHotkeyRecorder(currentHotkey: string): void {
         const modal = document.getElementById('hotkey-modal')!;
         const canvas = document.getElementById('hotkey-canvas')!;
-        const saveBtn = document.getElementById('hotkey-save-btn') as HTMLButtonElement;
+        const saveBtn = document.getElementById('hotkey-save-btn') as HTMLElement & { disabled: boolean };
         const clearBtn = document.getElementById('hotkey-clear-btn')!;
         const cancelBtn = document.getElementById('hotkey-cancel-btn')!;
         const currentValEl = document.getElementById('hotkey-modal-current-val')!;

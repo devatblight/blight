@@ -1658,9 +1658,6 @@ kbd {
     background: var(--bg-hover);
 }
 
-/* On Windows, hide the SVG GitHub icon (win-icon glyph takes over) */
-[data-os="windows"] .update-res-github > svg { display: none; }
-:not([data-os="windows"]) .update-res-github > .win-icon { display: none; }
 
 .settings-btn {
     display: inline-flex;
@@ -2479,13 +2476,17 @@ fluent-button::part(control) {
     letter-spacing: 0;
 }
 
-/* danger modifier — only override text color, keep Fluent surface colors */
+/* danger modifier — red destructive button */
 fluent-button.fluent-danger::part(control) {
-    color: #f87171;
+    color: #fff;
+    background: rgba(220, 38, 38, 0.80);
+    border-color: rgba(220, 38, 38, 0.5);
 }
 
 fluent-button.fluent-danger:hover::part(control) {
-    color: #fca5a5;
+    color: #fff;
+    background: rgba(220, 38, 38, 1.0);
+    border-color: rgba(220, 38, 38, 0.8);
 }
 
 /* --- fluent-switch ---

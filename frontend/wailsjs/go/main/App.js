@@ -102,16 +102,16 @@ export function OpenFolder(arg1) {
   return window['go']['main']['App']['OpenFolder'](arg1);
 }
 
-export function OpenURL(arg1) {
-  return window['go']['main']['App']['OpenURL'](arg1);
-}
-
 export function OpenFolderPicker() {
   return window['go']['main']['App']['OpenFolderPicker']();
 }
 
 export function OpenSettingsWindow() {
   return window['go']['main']['App']['OpenSettingsWindow']();
+}
+
+export function OpenURL(arg1) {
+  return window['go']['main']['App']['OpenURL'](arg1);
 }
 
 export function RefreshApps() {

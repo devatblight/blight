@@ -1,4 +1,5 @@
 import { CompleteOnboarding } from '../../wailsjs/go/main/App';
+import { applyTheme } from '../main';
 
 export class Splash {
     private splashEl: HTMLElement;
@@ -84,7 +85,7 @@ export class Splash {
 
     private _selectTheme(theme: string): void {
         this._theme = theme;
-        document.documentElement.dataset['theme'] = theme;
+        applyTheme(theme);
 
         document.querySelectorAll<HTMLElement>('[data-theme-card]').forEach((card) => {
             card.classList.toggle('selected', card.dataset['themeCard'] === theme);
