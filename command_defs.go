@@ -121,13 +121,6 @@ func normalizeCommand(cmd CommandDefinition) (CommandDefinition, error) {
 	return cmd, nil
 }
 
-func commandCanonicalID(id string) string {
-	if idx := strings.Index(id, "|"); idx >= 0 {
-		return id[:idx]
-	}
-	return id
-}
-
 func commandPinnedID(id string) string {
 	return "command:" + id
 }
