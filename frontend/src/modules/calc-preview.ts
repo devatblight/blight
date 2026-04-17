@@ -5,9 +5,25 @@ export class CalcPreview {
         this.el = el;
     }
 
-    show(result: string): void {
-        this.el.textContent = '= ' + result;
-        this.el.setAttribute('aria-hidden', 'false');
+    update(query: string): void {
+        const calcRegex = /^[\d\s+\-*/().]+$/;
+        if (calcRegex.test(query) && /[+\-*/]/.test(query)) {
+            try {
+                const result = Function('"use strict"; return (' + query + ')')();
+                if (typeof result === 'number' && isFinite(result)) {
+                    this.el.textContent =
+                        '= ' +
+                        (Number.isInteger(result)
+                            ? result.toString()
+                            : result.toFixed(6).replace(/\.?0+$/, ''));
+                    this.el.setAttribute('aria-hidden', 'false');
+                    return;
+                }
+            } catch {
+                /* ignore */
+            }
+        }
+        this.clear();
     }
 
     clear(): void {

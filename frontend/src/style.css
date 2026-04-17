@@ -123,10 +123,6 @@ body {
     flex-shrink: 0;
 }
 
-.search-container.command-mode {
-    background: linear-gradient(180deg, rgba(92, 154, 255, 0.08), transparent);
-}
-
 .launcher.spotlight-mode {
     width: min(760px, calc(100% - 24px));
     height: auto;
@@ -382,10 +378,6 @@ body {
     background: var(--accent-soft);
     color: var(--accent);
     outline: none;
-}
-
-.context-action.context-action-destructive {
-    color: #ffb4b4;
 }
 
 .context-action-icon {

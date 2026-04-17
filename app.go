@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	goruntime "runtime"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -34,25 +36,18 @@ type UpdateInfo struct {
 }
 
 type SearchResult struct {
-	ID                   string `json:"id"`
-	Title                string `json:"title"`
-	Subtitle             string `json:"subtitle"`
-	Icon                 string `json:"icon"`
-	Category             string `json:"category"`
-	Path                 string `json:"path"`
-	Kind                 string `json:"kind"`
-	Score                int    `json:"score"`
-	PrimaryActionLabel   string `json:"primaryActionLabel"`
-	SecondaryActionLabel string `json:"secondaryActionLabel"`
-	SupportsActions      bool   `json:"supportsActions"`
+	ID       string `json:"id"`
+	Title    string `json:"title"`
+	Subtitle string `json:"subtitle"`
+	Icon     string `json:"icon"`
+	Category string `json:"category"`
+	Path     string `json:"path"`
 }
 
 type ContextAction struct {
-	ID          string `json:"id"`
-	Label       string `json:"label"`
-	Icon        string `json:"icon"`
-	Shortcut    string `json:"shortcut"`
-	Destructive bool   `json:"destructive"`
+	ID    string `json:"id"`
+	Label string `json:"label"`
+	Icon  string `json:"icon"`
 }
 
 type BlightConfig struct {
@@ -89,8 +84,7 @@ type BlightConfig struct {
 	// Web search
 	// URL template for web searches; %s is replaced with the URL-encoded query.
 	// Default: https://www.google.com/search?q=%s
-	SearchEngineURL string              `json:"searchEngineURL,omitempty"`
-	Commands        []CommandDefinition `json:"commands,omitempty"`
+	SearchEngineURL string `json:"searchEngineURL,omitempty"`
 
 	// User-defined aliases: trigger → expansion (URL or text snippet)
 	Aliases map[string]string `json:"aliases,omitempty"`
@@ -379,7 +373,6 @@ func defaultConfig() BlightConfig {
 		FooterHints:         "always",
 		StartOnStartup:      false,
 		HideNotifyIcon:      false,
-		SearchEngineURL:     "https://www.google.com/search?q=%s",
 	}
 }
 
@@ -416,13 +409,6 @@ func (a *App) loadConfig() {
 	}
 	if a.config.FooterHints == "" {
 		a.config.FooterHints = "always"
-	}
-	if a.config.SearchEngineURL == "" {
-		a.config.SearchEngineURL = "https://www.google.com/search?q=%s"
-	}
-
-	if a.migrateAliasesToCommands() {
-		_ = a.saveConfig()
 	}
 }
 
@@ -511,9 +497,6 @@ func (a *App) SaveSettings(cfg BlightConfig) error {
 	if cfg.FooterHints != "" {
 		a.config.FooterHints = cfg.FooterHints
 	}
-	if cfg.SearchEngineURL != "" {
-		a.config.SearchEngineURL = cfg.SearchEngineURL
-	}
 	if cfg.PlaceholderText != "" {
 		a.config.PlaceholderText = cfg.PlaceholderText
 	}
@@ -526,9 +509,6 @@ func (a *App) SaveSettings(cfg BlightConfig) error {
 
 	if cfg.Aliases != nil {
 		a.config.Aliases = cfg.Aliases
-	}
-	if cfg.Commands != nil {
-		a.config.Commands = cfg.Commands
 	}
 	if cfg.PinnedItems != nil {
 		a.config.PinnedItems = cfg.PinnedItems
@@ -576,13 +556,208 @@ func (a *App) OpenFolderPicker() string {
 }
 
 func (a *App) Search(query string) []SearchResult {
-	results := a.searchAll(query)
-	debug.Get().Debug("search", map[string]interface{}{"query": query, "results": len(results)})
+	log := debug.Get()
+	if query == "" {
+		return a.getDefaultResults()
+	}
+
+	// Path-browser mode: ~ or any absolute path prefix triggers live dir listing.
+	if strings.HasPrefix(query, "~") || isAbsPath(query) {
+		return a.searchPath(query)
+	}
+
+	var results []SearchResult
+
+	// URL detection: if the query looks like a URL, offer to open it directly.
+	if isURL(query) {
+		results = append(results, SearchResult{
+			ID:       "url-open:" + query,
+			Title:    "Open URL",
+			Subtitle: query,
+			Icon:     "",
+			Category: "Web",
+		})
+	}
+
+	// Aliases — match any trigger that starts with the query
+	if len(a.config.Aliases) > 0 {
+		qLower := strings.ToLower(query)
+		for trigger, expansion := range a.config.Aliases {
+			if strings.HasPrefix(strings.ToLower(trigger), qLower) {
+				results = append(results, SearchResult{
+					ID:       "alias:" + trigger,
+					Title:    trigger,
+					Subtitle: expansion,
+					Category: "Aliases",
+				})
+			}
+		}
+	}
+
+	if commands.IsCalcQuery(query) {
+		calc := commands.Evaluate(query)
+		if calc.Valid {
+			results = append(results, SearchResult{
+				ID:       "calc-result",
+				Title:    calc.Result,
+				Subtitle: calc.Expression + " — press Enter to copy",
+				Icon:     "",
+				Category: "Calculator",
+			})
+		}
+	}
+
+	queryLower := strings.ToLower(query)
+	if strings.HasPrefix(queryLower, "cb ") || strings.HasPrefix(queryLower, "clip ") || queryLower == "clipboard" || queryLower == "cb" || queryLower == "clip" {
+		entries := a.clipboard.Entries()
+		limit := 8
+		if len(entries) < limit {
+			limit = len(entries)
+		}
+		for i, entry := range entries[:limit] {
+			preview := entry.Content
+			if len(preview) > 80 {
+				preview = preview[:80] + "…"
+			}
+			results = append(results, SearchResult{
+				ID:       fmt.Sprintf("clip-%d", i),
+				Title:    preview,
+				Subtitle: "Clipboard — press Enter to copy",
+				Icon:     "",
+				Category: "Clipboard",
+			})
+		}
+	}
+
+	results = append(results, a.searchSystemCommands(query)...)
+	results = append(results, a.searchApps(query)...)
+	results = append(results, a.searchDirs(query)...)
+	results = append(results, a.searchFiles(query)...)
+
+	if len(results) == 0 {
+		return []SearchResult{
+			{
+				ID:       "web-search:" + query,
+				Title:    "Search the web for \"" + query + "\"",
+				Subtitle: "Opens in your default browser",
+				Icon:     "",
+				Category: "Web",
+			},
+		}
+	}
+
+	// Always append a web search option at the bottom for non-empty queries
+	results = append(results, SearchResult{
+		ID:       "web-search:" + query,
+		Title:    "Search the web for \"" + query + "\"",
+		Subtitle: "Opens in your default browser",
+		Icon:     "",
+		Category: "Web",
+	})
+
+	log.Debug("search", map[string]interface{}{"query": query, "results": len(results)})
 	return results
 }
 
 func (a *App) Execute(id string) string {
-	return a.executeResult(id)
+	debug.Get().Info("execute", map[string]interface{}{"id": id})
+
+	if strings.HasPrefix(id, "web-search:") {
+		query := strings.TrimPrefix(id, "web-search:")
+		tmpl := a.config.SearchEngineURL
+		if tmpl == "" {
+			tmpl = "https://www.google.com/search?q=%s"
+		}
+		searchURL := strings.ReplaceAll(tmpl, "%s", url.QueryEscape(query))
+		runtime.BrowserOpenURL(a.ctx, searchURL)
+		runtime.WindowHide(a.ctx)
+		a.visible.Store(false)
+		return "ok"
+	}
+
+	if strings.HasPrefix(id, "url-open:") {
+		target := strings.TrimPrefix(id, "url-open:")
+		runtime.BrowserOpenURL(a.ctx, target)
+		runtime.WindowHide(a.ctx)
+		a.visible.Store(false)
+		return "ok"
+	}
+
+	if strings.HasPrefix(id, "alias:") {
+		trigger := strings.TrimPrefix(id, "alias:")
+		expansion, ok := a.config.Aliases[trigger]
+		if !ok {
+			return "not found"
+		}
+		if strings.HasPrefix(expansion, "http://") || strings.HasPrefix(expansion, "https://") {
+			runtime.BrowserOpenURL(a.ctx, expansion)
+			runtime.WindowHide(a.ctx)
+			a.visible.Store(false)
+			return "ok"
+		}
+		runtime.ClipboardSetText(a.ctx, expansion)
+		return "copied"
+	}
+
+	if id == "calc-result" {
+		runtime.ClipboardSetText(a.ctx, "")
+		return "copied"
+	}
+
+	if strings.HasPrefix(id, "clip-") {
+		idxStr := strings.TrimPrefix(id, "clip-")
+		var idx int
+		fmt.Sscanf(idxStr, "%d", &idx)
+		if a.clipboard.CopyToClipboard(idx) {
+			return "copied"
+		}
+		return "error"
+	}
+
+	if strings.HasPrefix(id, "sys-") {
+		sysID := strings.TrimPrefix(id, "sys-")
+		if err := commands.ExecuteSystemCommand(sysID); err != nil {
+			return err.Error()
+		}
+		return "ok"
+	}
+
+	if strings.HasPrefix(id, "file-open:") {
+		filePath := strings.TrimPrefix(id, "file-open:")
+		a.usage.Record("file-open:" + filePath)
+		shellOpen(filePath)
+		runtime.WindowHide(a.ctx)
+		a.visible.Store(false)
+		return "ok"
+	}
+
+	if strings.HasPrefix(id, "file-reveal:") {
+		filePath := strings.TrimPrefix(id, "file-reveal:")
+		explorerSelect(filePath)
+		return "ok"
+	}
+
+	if strings.HasPrefix(id, "dir-open:") {
+		dirPath := strings.TrimPrefix(id, "dir-open:")
+		a.usage.Record("dir-open:" + dirPath)
+		shellOpen(dirPath)
+		runtime.WindowHide(a.ctx)
+		a.visible.Store(false)
+		return "ok"
+	}
+
+	allApps := a.scanner.Apps()
+	for _, app := range allApps {
+		if app.Name == id {
+			a.usage.Record(id)
+			if err := apps.Launch(app); err != nil {
+				return err.Error()
+			}
+			runtime.WindowHide(a.ctx)
+			return "ok"
+		}
+	}
+	return "not found"
 }
 
 // icon returns a Segoe MDL2/Fluent glyph on Windows and a plain emoji on other platforms.
@@ -615,11 +790,210 @@ func elevateLabel() string {
 }
 
 func (a *App) GetContextActions(id string) []ContextAction {
-	return a.contextActionsFor(id)
+	switch {
+	case strings.HasPrefix(id, "dir-open:"):
+		return []ContextAction{
+			{ID: "open", Label: "Open", Icon: icon("\uE768", "▶")},
+			{ID: "terminal", Label: "Open in Terminal", Icon: icon("\uE756", "⌨")},
+			{ID: "copy-path", Label: "Copy Path", Icon: icon("\uE8C8", "📋")},
+		}
+	case strings.HasPrefix(id, "file-open:"):
+		return []ContextAction{
+			{ID: "open", Label: "Open", Icon: icon("\uE768", "▶")},
+			{ID: "explorer", Label: revealLabel(), Icon: icon("\uE8B7", "📂")},
+			{ID: "copy-path", Label: "Copy Path", Icon: icon("\uE8C8", "📋")},
+			{ID: "copy-name", Label: "Copy Name", Icon: icon("\uE70F", "📝")},
+		}
+	case strings.HasPrefix(id, "clip-"):
+		return []ContextAction{
+			{ID: "copy", Label: "Copy", Icon: icon("\uE8C8", "📋")},
+			{ID: "delete", Label: "Delete", Icon: icon("\uE74D", "🗑️")},
+		}
+	case strings.HasPrefix(id, "sys-"):
+		return []ContextAction{
+			{ID: "run", Label: "Run", Icon: icon("\uE768", "▶")},
+		}
+	case strings.HasPrefix(id, "alias:"):
+		return []ContextAction{
+			{ID: "open", Label: "Use", Icon: icon("\uE768", "▶")},
+			{ID: "copy", Label: "Copy Expansion", Icon: icon("\uE8C8", "📋")},
+			{ID: "delete-alias", Label: "Delete Alias", Icon: icon("\uE74D", "🗑️")},
+		}
+	case id == "calc-result" || id == "no-results" || strings.HasPrefix(id, "web-search:"):
+		return []ContextAction{}
+	default:
+		// App — dynamic pin label and icon
+		pinLabel := "Pin to Top"
+		pinIcon := icon("\uE718", "📌")
+		for _, p := range a.config.PinnedItems {
+			if p == id {
+				pinLabel = "Unpin from Top"
+				pinIcon = icon("\uE77A", "📌")
+				break
+			}
+		}
+		return []ContextAction{
+			{ID: "open", Label: "Open", Icon: icon("\uE768", "▶")},
+			{ID: "admin", Label: elevateLabel(), Icon: icon("\uE7EF", "🛡️")},
+			{ID: "explorer", Label: revealLabel(), Icon: icon("\uE8B7", "📂")},
+			{ID: "copy-path", Label: "Copy Path", Icon: icon("\uE8C8", "📋")},
+			{ID: "pin", Label: pinLabel, Icon: pinIcon},
+		}
+	}
 }
 
 func (a *App) ExecuteContextAction(resultID string, actionID string) string {
-	return a.performContextAction(resultID, actionID)
+	// Aliases
+	if strings.HasPrefix(resultID, "alias:") {
+		trigger := strings.TrimPrefix(resultID, "alias:")
+		expansion, ok := a.config.Aliases[trigger]
+		if !ok {
+			return "not found"
+		}
+		switch actionID {
+		case "open":
+			if strings.HasPrefix(expansion, "http://") || strings.HasPrefix(expansion, "https://") {
+				runtime.BrowserOpenURL(a.ctx, expansion)
+				runtime.WindowHide(a.ctx)
+				a.visible.Store(false)
+			} else {
+				runtime.ClipboardSetText(a.ctx, expansion)
+			}
+			return "ok"
+		case "copy":
+			runtime.ClipboardSetText(a.ctx, expansion)
+			return "ok"
+		case "delete-alias":
+			delete(a.config.Aliases, trigger)
+			_ = a.saveConfig()
+			return "ok"
+		}
+		return "unknown action"
+	}
+
+	// Folders
+	if strings.HasPrefix(resultID, "dir-open:") {
+		dirPath := strings.TrimPrefix(resultID, "dir-open:")
+		switch actionID {
+		case "open":
+			shellOpen(dirPath)
+			runtime.WindowHide(a.ctx)
+			a.visible.Store(false)
+			return "ok"
+		case "terminal":
+			openInTerminal(dirPath)
+			return "ok"
+		case "copy-path":
+			runtime.ClipboardSetText(a.ctx, dirPath)
+			return "ok"
+		}
+		return "unknown action"
+	}
+
+	// Files
+	if strings.HasPrefix(resultID, "file-open:") {
+		filePath := strings.TrimPrefix(resultID, "file-open:")
+		switch actionID {
+		case "open":
+			shellOpen(filePath)
+			runtime.WindowHide(a.ctx)
+			a.visible.Store(false)
+			return "ok"
+		case "explorer":
+			explorerSelect(filePath)
+			return "ok"
+		case "copy-path":
+			runtime.ClipboardSetText(a.ctx, filePath)
+			return "ok"
+		case "copy-name":
+			runtime.ClipboardSetText(a.ctx, filepath.Base(filePath))
+			return "ok"
+		}
+		return "unknown action"
+	}
+
+	// Clipboard entries
+	if strings.HasPrefix(resultID, "clip-") {
+		idxStr := strings.TrimPrefix(resultID, "clip-")
+		var idx int
+		fmt.Sscanf(idxStr, "%d", &idx)
+		switch actionID {
+		case "copy", "open":
+			if a.clipboard.CopyToClipboard(idx) {
+				return "copied"
+			}
+			return "error"
+		case "delete":
+			a.clipboard.Delete(idx)
+			return "ok"
+		}
+		return "unknown action"
+	}
+
+	// System commands
+	if strings.HasPrefix(resultID, "sys-") {
+		if actionID == "run" {
+			sysID := strings.TrimPrefix(resultID, "sys-")
+			if err := commands.ExecuteSystemCommand(sysID); err != nil {
+				return err.Error()
+			}
+			return "ok"
+		}
+		return "unknown action"
+	}
+
+	// Apps
+	allApps := a.scanner.Apps()
+	var target apps.AppEntry
+	found := false
+
+	for _, app := range allApps {
+		if app.Name == resultID {
+			target = app
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return "not found"
+	}
+
+	switch actionID {
+	case "open":
+		a.usage.Record(resultID)
+		if err := apps.Launch(target); err != nil {
+			return err.Error()
+		}
+		runtime.WindowHide(a.ctx)
+		return "ok"
+
+	case "admin":
+		a.usage.Record(resultID)
+		err := runAsAdmin(target.Path)
+		if err != nil {
+			return err.Error()
+		}
+		runtime.WindowHide(a.ctx)
+		return "ok"
+
+	case "explorer":
+		explorerSelect(target.Path)
+		return "ok"
+
+	case "copy-path":
+		runtime.ClipboardSetText(a.ctx, target.Path)
+		return "ok"
+
+	case "pin":
+		pinned := a.TogglePinned(resultID)
+		if pinned {
+			return "pinned"
+		}
+		return "unpinned"
+	}
+
+	return "unknown action"
 }
 
 func (a *App) GetIcon(path string) string {
@@ -657,63 +1031,52 @@ func (a *App) ExportSettings() string {
 
 // ImportSettings replaces the current config with one parsed from a JSON string.
 func (a *App) ImportSettings(data string) error {
-	if err := json.Unmarshal([]byte(data), &BlightConfig{}); err != nil {
+	var cfg BlightConfig
+	if err := json.Unmarshal([]byte(data), &cfg); err != nil {
 		return fmt.Errorf("invalid settings JSON: %w", err)
 	}
-	a.config = defaultConfig()
-	if err := json.Unmarshal([]byte(data), &a.config); err != nil {
-		return fmt.Errorf("invalid settings JSON: %w", err)
-	}
-	if a.config.SearchEngineURL == "" {
-		a.config.SearchEngineURL = "https://www.google.com/search?q=%s"
-	}
-	a.migrateAliasesToCommands()
+	a.config = cfg
 	return a.saveConfig()
 }
 
 // GetUsageScores returns a map of item ID → decayed usage score for items with
 // at least one recorded use. Used by the frontend to show frequency indicators.
 func (a *App) GetUsageScores() map[string]int {
-	return a.usage.AllScores()
+	scores := make(map[string]int)
+	for _, app := range a.scanner.Apps() {
+		if s := a.usage.Score(app.Name); s > 0 {
+			scores[app.Name] = s
+		}
+	}
+	return scores
 }
 
 // GetAliases returns the current alias map (trigger → expansion).
 func (a *App) GetAliases() map[string]string {
-	aliases := make(map[string]string)
-	for _, commandDefinition := range a.config.Commands {
-		if commandDefinition.RequiresArgument {
-			continue
-		}
-		if commandDefinition.ActionType != "open_url" && commandDefinition.ActionType != "copy_text" {
-			continue
-		}
-		aliases[commandDefinition.Keyword] = commandDefinition.Template
+	if a.config.Aliases == nil {
+		return map[string]string{}
 	}
-	return aliases
+	return a.config.Aliases
 }
 
 // SaveAlias creates or updates an alias.
 func (a *App) SaveAlias(trigger, expansion string) error {
-	trigger = strings.ToLower(strings.TrimSpace(trigger))
+	trigger = strings.TrimSpace(trigger)
 	expansion = strings.TrimSpace(expansion)
 	if trigger == "" || expansion == "" {
 		return fmt.Errorf("trigger and expansion must not be empty")
 	}
-	aliasCommand := aliasToCommand(trigger, expansion)
-	if existingCommand, index, found := a.findUserCommand(aliasCommand.ID); found {
-		aliasCommand.Pinned = existingCommand.Pinned
-		a.config.Commands[index] = aliasCommand
-	} else {
-		a.config.Commands = append(a.config.Commands, aliasCommand)
+	if a.config.Aliases == nil {
+		a.config.Aliases = make(map[string]string)
 	}
+	a.config.Aliases[strings.ToLower(trigger)] = expansion
 	return a.saveConfig()
 }
 
 // DeleteAlias removes an alias by trigger.
 func (a *App) DeleteAlias(trigger string) error {
-	aliasID := "legacy-" + strings.ToLower(strings.TrimSpace(trigger))
-	if _, index, found := a.findUserCommand(aliasID); found {
-		a.config.Commands = append(a.config.Commands[:index], a.config.Commands[index+1:]...)
+	if a.config.Aliases != nil {
+		delete(a.config.Aliases, trigger)
 	}
 	return a.saveConfig()
 }
@@ -721,15 +1084,14 @@ func (a *App) DeleteAlias(trigger string) error {
 // TogglePinned pins an item if not already pinned, or unpins it if it is.
 // Returns true if the item is now pinned, false if it was unpinned.
 func (a *App) TogglePinned(id string) bool {
-	canonicalID := canonicalPinnedID(id)
-	for index, pinnedID := range a.config.PinnedItems {
-		if pinnedID == canonicalID {
-			a.config.PinnedItems = append(a.config.PinnedItems[:index], a.config.PinnedItems[index+1:]...)
+	for i, p := range a.config.PinnedItems {
+		if p == id {
+			a.config.PinnedItems = append(a.config.PinnedItems[:i], a.config.PinnedItems[i+1:]...)
 			_ = a.saveConfig()
 			return false
 		}
 	}
-	a.config.PinnedItems = append(a.config.PinnedItems, canonicalID)
+	a.config.PinnedItems = append(a.config.PinnedItems, id)
 	_ = a.saveConfig()
 	return true
 }
@@ -751,6 +1113,218 @@ func (a *App) maxResults() int {
 		return a.config.MaxResults
 	}
 	return 8
+}
+
+func (a *App) searchFiles(query string) []SearchResult {
+	if len(query) < 3 {
+		return nil
+	}
+
+	status := a.fileIdx.Status()
+	if status.State != "ready" {
+		return nil
+	}
+
+	allScores := a.usage.AllScores()
+	fileScores := make(map[string]int, len(allScores))
+	for k, v := range allScores {
+		if strings.HasPrefix(k, "file-open:") {
+			fileScores[strings.TrimPrefix(k, "file-open:")] = v
+		}
+	}
+
+	fileResults := a.fileIdx.SearchFiles(query, fileScores)
+	limit := a.maxResults()
+	if len(fileResults) > limit {
+		fileResults = fileResults[:limit]
+	}
+
+	var results []SearchResult
+	for _, f := range fileResults {
+		results = append(results, SearchResult{
+			ID:       "file-open:" + f.Path,
+			Title:    f.Name,
+			Subtitle: prettifyPath(f.Dir),
+			Icon:     "",
+			Category: "Files",
+			Path:     f.Path,
+		})
+	}
+
+	return results
+}
+
+func (a *App) searchDirs(query string) []SearchResult {
+	if len(query) < 2 || a.config.DisableFolderIndex {
+		return nil
+	}
+
+	status := a.fileIdx.Status()
+	if status.State != "ready" {
+		return nil
+	}
+
+	allScores := a.usage.AllScores()
+	dirScores := make(map[string]int, len(allScores))
+	for k, v := range allScores {
+		if strings.HasPrefix(k, "dir-open:") {
+			dirScores[strings.TrimPrefix(k, "dir-open:")] = v
+		}
+	}
+
+	dirResults := a.fileIdx.SearchDirs(query, dirScores)
+	limit := a.maxResults() / 2
+	if limit < 3 {
+		limit = 3
+	}
+	if len(dirResults) > limit {
+		dirResults = dirResults[:limit]
+	}
+
+	var results []SearchResult
+	for _, d := range dirResults {
+		results = append(results, SearchResult{
+			ID:       "dir-open:" + d.Path,
+			Title:    d.Name,
+			Subtitle: prettifyPath(d.Path),
+			Icon:     "",
+			Category: "Folders",
+			Path:     d.Path,
+		})
+	}
+	return results
+}
+
+func (a *App) searchSystemCommands(query string) []SearchResult {
+	queryLower := strings.ToLower(query)
+	var results []SearchResult
+
+	for _, cmd := range commands.SystemCommands {
+		matched := false
+		if strings.Contains(strings.ToLower(cmd.Name), queryLower) {
+			matched = true
+		}
+		for _, keyword := range cmd.Keywords {
+			if strings.Contains(keyword, queryLower) {
+				matched = true
+				break
+			}
+		}
+		if matched {
+			results = append(results, SearchResult{
+				ID:       "sys-" + cmd.ID,
+				Title:    cmd.Name,
+				Subtitle: cmd.Subtitle,
+				Icon:     cmd.Icon,
+				Category: "System",
+			})
+		}
+	}
+
+	return results
+}
+
+func (a *App) searchApps(query string) []SearchResult {
+	allApps := a.scanner.Apps()
+	names := a.scanner.Names()
+
+	usageScores := make([]int, len(allApps))
+	for i, app := range allApps {
+		usageScores[i] = a.usage.Score(app.Name)
+		if slices.Contains(a.config.PinnedItems, app.Name) {
+			usageScores[i] += 100
+		}
+	}
+
+	matches := search.Fuzzy(query, names, usageScores)
+
+	var results []SearchResult
+	limit := min(len(matches), a.maxResults())
+
+	for _, match := range matches[:limit] {
+		app := allApps[match.Index]
+
+		subtitle := "Application"
+		if !app.IsLnk {
+			subtitle = prettifyPath(app.Path)
+		}
+
+		// Icons are loaded asynchronously by the frontend via GetIcon(path)
+		results = append(results, SearchResult{
+			ID:       app.Name,
+			Title:    app.Name,
+			Subtitle: subtitle,
+			Icon:     "",
+			Category: "Applications",
+			Path:     app.Path,
+		})
+	}
+
+	return results
+}
+
+func (a *App) getDefaultResults() []SearchResult {
+	allApps := a.scanner.Apps()
+	var results []SearchResult
+
+	// Pinned items first
+	pinnedSet := make(map[string]bool)
+	for _, pinnedID := range a.config.PinnedItems {
+		pinnedSet[pinnedID] = true
+		for _, app := range allApps {
+			if app.Name == pinnedID {
+				subtitle := "Application"
+				if !app.IsLnk {
+					subtitle = prettifyPath(app.Path)
+				}
+				results = append(results, SearchResult{
+					ID:       app.Name,
+					Title:    app.Name,
+					Subtitle: subtitle,
+					Category: "Pinned",
+					Path:     app.Path,
+				})
+				break
+			}
+		}
+	}
+
+	names := a.scanner.Names()
+	usageScores := make([]int, len(allApps))
+	for i, app := range allApps {
+		usageScores[i] = a.usage.Score(app.Name)
+	}
+	matches := search.Fuzzy("", names, usageScores)
+
+	count := 6
+	added := 0
+	for _, match := range matches {
+		if added >= count {
+			break
+		}
+		app := allApps[match.Index]
+		if pinnedSet[app.Name] {
+			continue // already shown above
+		}
+		category := "Suggested"
+		if a.usage.Score(app.Name) > 0 {
+			category = "Recent"
+		}
+		subtitle := "Application"
+		if !app.IsLnk {
+			subtitle = prettifyPath(app.Path)
+		}
+		results = append(results, SearchResult{
+			ID:       app.Name,
+			Title:    app.Name,
+			Subtitle: subtitle,
+			Category: category,
+			Path:     app.Path,
+		})
+		added++
+	}
+
+	return results
 }
 
 // searchPath handles path-browser mode. Triggered by queries starting with ~

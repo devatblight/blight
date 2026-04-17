@@ -242,7 +242,7 @@
           <div class="footer-actions">
             <span class="footer-hint"><kbd>↑↓</kbd> Navigate</span>
             <span id="footer-hint-primary" class="footer-hint"><kbd>↵</kbd> Open</span>
-            <span id="footer-hint-actions" class="footer-hint"><kbd>Tab</kbd> Actions</span>
+            <span id="footer-hint-actions" class="footer-hint"><kbd>Ctrl+K</kbd> Actions</span>
             <span id="footer-hint-secondary" class="footer-hint footer-hint-secondary hidden"></span>
             <span class="footer-hint"><kbd>Ctrl+,</kbd> Settings</span>
             <button id="settings-open-btn" class="footer-settings-btn" title="Settings">
@@ -284,7 +284,7 @@
           <button class="settings-nav-item" data-tab="appearance"><span class="nav-item-icon win-icon">&#xE771;</span>Appearance</button>
           <button class="settings-nav-item" data-tab="system"><span class="nav-item-icon win-icon">&#xE770;</span>System</button>
           <button class="settings-nav-item" data-tab="files"><span class="nav-item-icon win-icon">&#xE8B7;</span>File Index</button>
-          <button class="settings-nav-item" data-tab="commands"><span class="nav-item-icon win-icon">&#xE71B;</span>Commands</button>
+          <button class="settings-nav-item" data-tab="aliases"><span class="nav-item-icon win-icon">&#xE71B;</span>Aliases</button>
           <button class="settings-nav-item" data-tab="updates"><span class="nav-item-icon win-icon">&#xE895;</span>Updates</button>
           <button class="settings-nav-item" data-tab="misc"><span class="nav-item-icon win-icon">&#xE712;</span>Misc</button>
         </nav>
@@ -542,57 +542,25 @@
             </div>
           </div>
 
-          <!-- === TAB: Commands === -->
-          <div class="settings-tab hidden" id="tab-commands">
+          <!-- === TAB: Aliases === -->
+          <div class="settings-tab hidden" id="tab-aliases">
             <div class="settings-section-group">
-              <div class="settings-group-label">Commands</div>
+              <div class="settings-group-label">Aliases</div>
 
               <div class="settings-row-item">
                 <div class="settings-row-info">
-                  <div class="settings-row-name">New Command</div>
-                  <div class="settings-row-desc">Create quicklinks, snippets, path launchers, or local shell commands.</div>
+                  <div class="settings-row-name">New Alias</div>
+                  <div class="settings-row-desc">Create a keyword shortcut that copies text or opens a URL</div>
                 </div>
                 <div class="settings-row-control alias-add-controls">
                   <input id="alias-trigger-input" class="settings-input" type="text" maxlength="32" placeholder="trigger" title="Keyword to type in the launcher" />
                   <span class="settings-input-unit">→</span>
                   <input id="alias-expansion-input" class="settings-input settings-input-wide" type="text" placeholder="URL or text snippet" title="What happens when you use the alias: URL opens in browser, text is copied" />
-                  <fluent-button id="alias-add-btn" appearance="accent">Save</fluent-button>
-                </div>
-                <div class="command-editor-grid">
-                  <input id="command-title-input" class="settings-input settings-input-wide" type="text" maxlength="80" placeholder="Title" title="Display name shown in search results" />
-                  <input id="command-description-input" class="settings-input settings-input-wide" type="text" maxlength="140" placeholder="Description" title="Short description shown in the command editor" />
-                  <select id="command-action-type" class="settings-select" title="What this command does">
-                    <option value="open_url">Open URL</option>
-                    <option value="copy_text">Copy Text</option>
-                    <option value="open_path">Open Path</option>
-                    <option value="run_shell">Run Shell</option>
-                  </select>
-                  <input id="command-keywords-input" class="settings-input settings-input-wide" type="text" placeholder="Extra keywords, comma separated" title="Additional search keywords" />
-                </div>
-                <div class="command-editor-toggles">
-                  <label class="settings-inline-switch">
-                    <span>Requires Argument</span>
-                    <fluent-switch id="command-requires-argument"></fluent-switch>
-                  </label>
-                  <label class="settings-inline-switch">
-                    <span>Run as Admin</span>
-                    <fluent-switch id="command-run-as-admin"></fluent-switch>
-                  </label>
-                  <label class="settings-inline-switch">
-                    <span>Pinned</span>
-                    <fluent-switch id="command-pinned"></fluent-switch>
-                  </label>
-                </div>
-                <div id="command-warning" class="settings-row-desc hidden">
-                  Shell commands run locally on this machine and are not sandboxed.
-                </div>
-                <input id="command-editing-id" type="hidden" />
-                <div class="command-editor-actions">
-                  <fluent-button id="command-reset-btn" appearance="neutral">Clear Form</fluent-button>
+                  <fluent-button id="alias-add-btn" appearance="accent">Add</fluent-button>
                 </div>
               </div>
 
-              <div id="aliases-list" class="aliases-list commands-list"></div>
+              <div id="aliases-list" class="aliases-list"></div>
             </div>
           </div>
 

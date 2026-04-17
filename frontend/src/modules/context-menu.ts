@@ -34,7 +34,7 @@ export class ContextMenu {
 
         this.actions = actions;
         this.selectedIndex = fromKeyboard ? 0 : -1;
-        this.render(resultTitle);
+        this._render(resultTitle);
 
         this.menuEl.style.left = '0px';
         this.menuEl.style.top = '0px';
@@ -52,22 +52,22 @@ export class ContextMenu {
         this.actions = [];
     }
 
-    handleKeydown(event: KeyboardEvent): void {
+    handleKeydown(e: KeyboardEvent): void {
         if (this.actions.length === 0) return;
-        switch (event.key) {
+        switch (e.key) {
             case 'ArrowDown':
-                event.preventDefault();
+                e.preventDefault();
                 this.selectedIndex = (this.selectedIndex + 1) % this.actions.length;
-                this.updateSelection();
+                this._updateSelection();
                 break;
             case 'ArrowUp':
-                event.preventDefault();
+                e.preventDefault();
                 this.selectedIndex =
                     (this.selectedIndex - 1 + this.actions.length) % this.actions.length;
-                this.updateSelection();
+                this._updateSelection();
                 break;
             case 'Enter':
-                event.preventDefault();
+                e.preventDefault();
                 if (this.selectedIndex >= 0 && this.target) {
                     const action = this.actions[this.selectedIndex];
                     ExecuteContextAction(this.target, action.id).then((response) => {
@@ -79,55 +79,51 @@ export class ContextMenu {
                 }
                 break;
             case 'Escape':
-                event.preventDefault();
+                e.preventDefault();
                 this.hide();
                 break;
         }
     }
 
-    private render(resultTitle: string): void {
+    private _render(resultTitle: string): void {
         let html = '';
         if (resultTitle) {
             html += `<div class="context-menu-header">${escapeHtml(resultTitle)}</div>`;
         }
-
-        this.actions.forEach((action, actionIndex) => {
-            const selectedClass = actionIndex === this.selectedIndex ? ' kb-selected' : '';
-            const destructiveClass = action.destructive ? ' context-action-destructive' : '';
-            const shortcutHtml = action.shortcut
-                ? `<kbd class="context-action-shortcut">${escapeHtml(action.shortcut)}</kbd>`
-                : '';
-
+        this.actions.forEach((action, idx) => {
+            const kbClass = idx === this.selectedIndex ? ' kb-selected' : '';
+            let shortcutHtml = '';
+            if (idx === 0) shortcutHtml = `<kbd class="context-action-shortcut">↵</kbd>`;
+            else if (idx === 1) shortcutHtml = `<kbd class="context-action-shortcut">⌃↵</kbd>`;
             html += `
-                <button class="context-action${selectedClass}${destructiveClass}" data-action="${action.id}" data-idx="${actionIndex}">
+                <button class="context-action${kbClass}" data-action="${action.id}" data-idx="${idx}">
                     <span class="context-action-icon">${action.icon}</span>
                     <span class="context-action-label">${escapeHtml(action.label)}</span>
                     ${shortcutHtml}
                 </button>
             `;
         });
-
         this.menuEl.innerHTML = html;
         this.menuEl.classList.remove('hidden');
 
-        this.menuEl.querySelectorAll<HTMLElement>('.context-action').forEach((buttonEl) => {
-            buttonEl.addEventListener('click', async () => {
-                const actionId = buttonEl.dataset['action'];
+        this.menuEl.querySelectorAll<HTMLElement>('.context-action').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                const actionId = btn.dataset['action'];
                 if (!actionId || !this.target) return;
                 const response = await ExecuteContextAction(this.target, actionId);
                 this.hide();
                 this.onAction(actionId, response, resultTitle);
             });
-            buttonEl.addEventListener('mouseenter', () => {
-                this.selectedIndex = parseInt(buttonEl.dataset['idx'] ?? '0', 10);
-                this.updateSelection();
+            btn.addEventListener('mouseenter', () => {
+                this.selectedIndex = parseInt(btn.dataset['idx'] ?? '0', 10);
+                this._updateSelection();
             });
         });
     }
 
-    private updateSelection(): void {
-        this.menuEl.querySelectorAll('.context-action').forEach((buttonEl, actionIndex) => {
-            buttonEl.classList.toggle('kb-selected', actionIndex === this.selectedIndex);
+    private _updateSelection(): void {
+        this.menuEl.querySelectorAll('.context-action').forEach((btn, idx) => {
+            btn.classList.toggle('kb-selected', idx === this.selectedIndex);
         });
     }
 }

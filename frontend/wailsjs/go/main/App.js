@@ -22,10 +22,6 @@ export function CompleteOnboarding(arg1, arg2, arg3) {
   return window['go']['main']['App']['CompleteOnboarding'](arg1, arg2, arg3);
 }
 
-export function DeleteCommand(arg1) {
-  return window['go']['main']['App']['DeleteCommand'](arg1);
-}
-
 export function DeleteAlias(arg1) {
   return window['go']['main']['App']['DeleteAlias'](arg1);
 }
@@ -48,10 +44,6 @@ export function GetAliases() {
 
 export function GetConfig() {
   return window['go']['main']['App']['GetConfig']();
-}
-
-export function GetCommands() {
-  return window['go']['main']['App']['GetCommands']();
 }
 
 export function GetContextActions(arg1) {
@@ -132,10 +124,6 @@ export function ReindexFiles() {
 
 export function SaveAlias(arg1, arg2) {
   return window['go']['main']['App']['SaveAlias'](arg1, arg2);
-}
-
-export function SaveCommand(arg1) {
-  return window['go']['main']['App']['SaveCommand'](arg1);
 }
 
 export function SaveSettings(arg1) {

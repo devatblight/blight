@@ -15,7 +15,9 @@ import {
     CloseSettings,
     ExportSettings,
     ImportSettings,
-    GetCommands,
+    GetAliases,
+    SaveAlias,
+    DeleteAlias,
     OpenURL,
 } from '../../wailsjs/go/main/App';
 import { marked, Renderer } from 'marked';
@@ -40,7 +42,6 @@ export class Settings {
     private deps: SettingsDeps;
     private currentIndexDirs: string[] = [];
     private lastUpdateCheck = 0;
-    private currentEditingCommandId: string | null = null;
 
     // Hotkey recorder state
     private _hkPending = '';
@@ -151,8 +152,8 @@ export class Settings {
             this.currentIndexDirs = config.indexDirs || [];
             this._renderIndexDirs();
 
-            // Commands tab
-            this._loadCommandsTab();
+            // Aliases tab
+            this._loadAliasesTab();
         } catch (e) {
             // eslint-disable-next-line no-console
             console.error('Failed to load settings:', e);
@@ -166,24 +167,6 @@ export class Settings {
         }
         this.panelEl.classList.add('hidden');
         this.deps.onClose();
-    }
-
-    async openCommandEditor(commandId?: string): Promise<void> {
-        await this.open();
-        this.activateTab('commands');
-        if (!commandId) {
-            this._resetCommandForm();
-            return;
-        }
-
-        try {
-            const commands = await GetCommands();
-            const command = commands.find((item) => item.id === commandId);
-            if (!command) return;
-            this._fillCommandForm(command);
-        } catch {
-            /* non-critical */
-        }
     }
 
     activateTab(name: string): void {
@@ -202,7 +185,7 @@ export class Settings {
             btn.addEventListener('click', () => this.activateTab(btn.dataset['tab'] ?? ''));
         });
         this._bindTabKeyNav();
-        this._bindCommandEditor();
+        this._bindAliasAdd();
         this._bindHotkeyBadge();
 
         document.getElementById('settings-close')?.addEventListener('click', () => this.close());

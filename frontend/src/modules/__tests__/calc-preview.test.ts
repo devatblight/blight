@@ -10,19 +10,56 @@ describe('CalcPreview', () => {
         preview = new CalcPreview(el);
     });
 
-    it('shows the provided backend result', () => {
-        preview.show('3');
+    it('shows result for simple addition', () => {
+        preview.update('1 + 2');
         expect(el.textContent).toBe('= 3');
     });
 
+    it('shows result for subtraction', () => {
+        preview.update('10 - 4');
+        expect(el.textContent).toBe('= 6');
+    });
+
+    it('shows result for multiplication', () => {
+        preview.update('4 * 5');
+        expect(el.textContent).toBe('= 20');
+    });
+
+    it('shows result for division', () => {
+        preview.update('15 / 3');
+        expect(el.textContent).toBe('= 5');
+    });
+
+    it('shows a trimmed decimal result', () => {
+        preview.update('10 / 3');
+        // Should be a decimal number, not show trailing zeros
+        expect(el.textContent).toMatch(/^= \d+\.\d+$/);
+        expect(el.textContent).not.toMatch(/0+$/);
+    });
+
+    it('respects operator precedence', () => {
+        preview.update('2 + 3 * 4');
+        expect(el.textContent).toBe('= 14');
+    });
+
+    it('clears for non-numeric input', () => {
+        preview.update('hello world');
+        expect(el.textContent).toBe('');
+    });
+
+    it('clears for a number without operators', () => {
+        preview.update('42');
+        expect(el.textContent).toBe('');
+    });
+
     it('clears after having shown a result', () => {
-        preview.show('2');
-        preview.clear();
+        preview.update('1 + 1');
+        preview.update('');
         expect(el.textContent).toBe('');
     });
 
     it('sets aria-hidden to false when showing a result', () => {
-        preview.show('4');
+        preview.update('2 + 2');
         expect(el.getAttribute('aria-hidden')).toBe('false');
     });
 
@@ -31,7 +68,8 @@ describe('CalcPreview', () => {
         expect(el.getAttribute('aria-hidden')).toBe('true');
     });
 
-    it('starts without a value until shown or cleared', () => {
-        expect(el.textContent).toBe('');
+    it('sets aria-hidden to true when input is non-math', () => {
+        preview.update('not math');
+        expect(el.getAttribute('aria-hidden')).toBe('true');
     });
 });
