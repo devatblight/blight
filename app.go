@@ -665,125 +665,88 @@ func (a *App) Search(query string) []SearchResult {
 		return a.searchPath(query)
 	}
 
-	var results []SearchResult
+	caps := search.DefaultCaps()
+	var scored []search.Scored[SearchResult]
 
-	// URL detection: if the query looks like a URL, offer to open it directly.
+	// URL detection — uncapped, shown when query looks like a URL
 	if isURL(query) {
-		results = append(results, SearchResult{
-			ID:       "url-open:" + query,
-			Title:    "Open URL",
-			Subtitle: query,
-			Icon:     "",
-			Category: "Web",
+		scored = append(scored, search.Scored[SearchResult]{
+			Item:  SearchResult{ID: "url-open:" + query, Title: "Open URL", Subtitle: query, Category: "Web"},
+			Score: 9500,
+			Cat:   "Web",
 		})
 	}
 
-	// Aliases — match any trigger that starts with the query
+	// Aliases — legacy; migrated aliases also appear as Commands
 	if len(a.config.Aliases) > 0 {
 		qLower := strings.ToLower(query)
 		for trigger, expansion := range a.config.Aliases {
 			if strings.HasPrefix(strings.ToLower(trigger), qLower) {
-				results = append(results, SearchResult{
-					ID:       "alias:" + trigger,
-					Title:    trigger,
-					Subtitle: expansion,
-					Category: "Aliases",
+				scored = append(scored, search.Scored[SearchResult]{
+					Item:  SearchResult{ID: "alias:" + trigger, Title: trigger, Subtitle: expansion, Category: "Aliases"},
+					Score: 4000,
+					Cat:   "Aliases",
 				})
 			}
 		}
 	}
 
-	// Commands — match by keyword prefix or keyword + argument
-	{
-		qLower := strings.ToLower(query)
-		for _, cmd := range a.allCommands() {
-			kw := strings.ToLower(cmd.Keyword)
-			kwMatch := qLower == kw || strings.HasPrefix(qLower, kw+" ")
-			kwPrefix := strings.HasPrefix(kw, qLower) && qLower != kw
-			if !kwMatch && !kwPrefix {
-				continue
-			}
-			arg := ""
-			if strings.HasPrefix(qLower, kw+" ") {
-				arg = query[len(kw)+1:]
-			}
-			var id, subtitle string
-			if cmd.RequiresArgument && arg == "" {
-				id = "cmd-needs-arg:" + cmd.ID
-				subtitle = "Type an argument"
-			} else {
-				resolved := resolveCommandTemplate(cmd, arg)
-				id = commandResultID(cmd.ActionType, resolved)
-				subtitle = resolved
-			}
-			results = append(results, SearchResult{
-				ID:       id,
-				Title:    cmd.Title,
-				Subtitle: subtitle,
-				Icon:     cmd.Icon,
-				Category: "Commands",
-			})
-		}
-	}
+	// Commands — scored by match type
+	scored = append(scored, a.searchCommandsScored(query)...)
 
+	// Calculator — uncapped, only shown for math queries
 	if commands.IsCalcQuery(query) {
 		calc := commands.Evaluate(query)
 		if calc.Valid {
-			results = append(results, SearchResult{
-				ID:       "calc-result",
-				Title:    calc.Result,
-				Subtitle: calc.Expression + " — press Enter to copy",
-				Icon:     "",
-				Category: "Calculator",
+			scored = append(scored, search.Scored[SearchResult]{
+				Item:  SearchResult{ID: "calc-result", Title: calc.Result, Subtitle: calc.Expression + " — press Enter to copy", Category: "Calculator"},
+				Score: 9000,
+				Cat:   "Calculator",
 			})
 		}
 	}
 
+	// Clipboard shortcut keywords
 	queryLower := strings.ToLower(query)
 	if strings.HasPrefix(queryLower, "cb ") || strings.HasPrefix(queryLower, "clip ") || queryLower == "clipboard" || queryLower == "cb" || queryLower == "clip" {
-		entries := a.clipboard.Entries()
-		limit := 8
-		if len(entries) < limit {
-			limit = len(entries)
-		}
-		for i, entry := range entries[:limit] {
+		for i, entry := range a.clipboard.Entries() {
+			if i >= caps["Clipboard"] {
+				break
+			}
 			preview := entry.Content
 			if len(preview) > 80 {
 				preview = preview[:80] + "…"
 			}
-			results = append(results, SearchResult{
-				ID:       fmt.Sprintf("clip-%d", i),
-				Title:    preview,
-				Subtitle: "Clipboard — press Enter to copy",
-				Icon:     "",
-				Category: "Clipboard",
+			scored = append(scored, search.Scored[SearchResult]{
+				Item:  SearchResult{ID: fmt.Sprintf("clip-%d", i), Title: preview, Subtitle: "Clipboard — press Enter to copy", Category: "Clipboard"},
+				Score: 8000 - i*10,
+				Cat:   "Clipboard",
 			})
 		}
 	}
 
-	results = append(results, a.searchSystemCommands(query)...)
-	results = append(results, a.searchApps(query)...)
-	results = append(results, a.searchDirs(query)...)
-	results = append(results, a.searchFiles(query)...)
+	scored = append(scored, a.searchSystemCommandsScored(query)...)
+	scored = append(scored, a.searchAppsScored(query)...)
+	scored = append(scored, a.searchDirsScored(query)...)
+	scored = append(scored, a.searchFilesScored(query)...)
+
+	results := search.RankAndCap(scored, caps)
 
 	if len(results) == 0 {
-		return []SearchResult{
-			{
-				ID:       "web-search:" + query,
-				Title:    "Search the web for \"" + query + "\"",
-				Subtitle: "Opens in your default browser",
-				Icon:     "",
-				Category: "Web",
-			},
-		}
+		log.Debug("search no results — web fallback", map[string]interface{}{"query": query})
+		return []SearchResult{{
+			ID:       "web-search:" + query,
+			Title:    "Search the web for \"" + query + "\"",
+			Subtitle: "Opens in your default browser",
+			Category: "Web",
+		}}
 	}
 
-	// Always append a web search option at the bottom for non-empty queries
+	// Always append web search at the bottom
 	results = append(results, SearchResult{
 		ID:       "web-search:" + query,
 		Title:    "Search the web for \"" + query + "\"",
 		Subtitle: "Opens in your default browser",
-		Icon:     "",
 		Category: "Web",
 	})
 
@@ -1398,6 +1361,181 @@ func (a *App) maxResults() int {
 		return a.config.MaxResults
 	}
 	return 8
+}
+
+// searchCommandsScored returns command results with relevance scores.
+func (a *App) searchCommandsScored(query string) []search.Scored[SearchResult] {
+	qLower := strings.ToLower(query)
+	var out []search.Scored[SearchResult]
+	for _, cmd := range a.allCommands() {
+		kw := strings.ToLower(cmd.Keyword)
+		kwMatch := qLower == kw || strings.HasPrefix(qLower, kw+" ")
+		kwPrefix := strings.HasPrefix(kw, qLower) && qLower != kw
+		if !kwMatch && !kwPrefix {
+			continue
+		}
+		arg := ""
+		if strings.HasPrefix(qLower, kw+" ") {
+			arg = query[len(kw)+1:]
+		}
+		var id, subtitle string
+		if cmd.RequiresArgument && arg == "" {
+			id = "cmd-needs-arg:" + cmd.ID
+			subtitle = "Type an argument"
+		} else {
+			resolved := resolveCommandTemplate(cmd, arg)
+			id = commandResultID(cmd.ActionType, resolved)
+			subtitle = resolved
+		}
+		s := 3000 // keyword prefix
+		if kwMatch {
+			s = 8000 // exact keyword match
+		}
+		if cmd.Pinned {
+			s += 1000
+		}
+		out = append(out, search.Scored[SearchResult]{
+			Item:  SearchResult{ID: id, Title: cmd.Title, Subtitle: subtitle, Icon: cmd.Icon, Category: "Commands"},
+			Score: s,
+			Cat:   "Commands",
+		})
+	}
+	return out
+}
+
+// searchSystemCommandsScored returns system command results with relevance scores.
+func (a *App) searchSystemCommandsScored(query string) []search.Scored[SearchResult] {
+	queryLower := strings.ToLower(query)
+	var out []search.Scored[SearchResult]
+	for _, cmd := range commands.SystemCommands {
+		cmdName := strings.ToLower(cmd.Name)
+		matched := false
+		s := 0
+		if cmdName == queryLower {
+			matched = true
+			s = 10000
+		} else if strings.HasPrefix(cmdName, queryLower) {
+			matched = true
+			s = 5000 + len(queryLower)*10
+		} else if strings.Contains(cmdName, queryLower) {
+			matched = true
+			s = 2000 + len(queryLower)*5
+		}
+		if !matched {
+			for _, keyword := range cmd.Keywords {
+				if strings.Contains(keyword, queryLower) {
+					matched = true
+					s = 1500
+					break
+				}
+			}
+		}
+		if !matched {
+			continue
+		}
+		out = append(out, search.Scored[SearchResult]{
+			Item:  SearchResult{ID: "sys-" + cmd.ID, Title: cmd.Name, Subtitle: cmd.Subtitle, Icon: cmd.Icon, Category: "System"},
+			Score: s,
+			Cat:   "System",
+		})
+	}
+	return out
+}
+
+// searchAppsScored returns application results with relevance scores from the fuzzy engine.
+func (a *App) searchAppsScored(query string) []search.Scored[SearchResult] {
+	allApps := a.scanner.Apps()
+	names := a.scanner.Names()
+	usageScores := make([]int, len(allApps))
+	for i, app := range allApps {
+		usageScores[i] = a.usage.Score(app.Name)
+		if slices.Contains(a.config.PinnedItems, app.Name) {
+			usageScores[i] += 100
+		}
+	}
+	matches := search.Fuzzy(query, names, usageScores)
+	limit := min(len(matches), a.maxResults())
+	out := make([]search.Scored[SearchResult], 0, limit)
+	for _, m := range matches[:limit] {
+		app := allApps[m.Index]
+		subtitle := "Application"
+		if !app.IsLnk {
+			subtitle = prettifyPath(app.Path)
+		}
+		out = append(out, search.Scored[SearchResult]{
+			Item:  SearchResult{ID: app.Name, Title: app.Name, Subtitle: subtitle, Category: "Applications", Path: app.Path},
+			Score: m.Score,
+			Cat:   "Applications",
+		})
+	}
+	return out
+}
+
+// searchDirsScored returns directory results with relevance scores.
+func (a *App) searchDirsScored(query string) []search.Scored[SearchResult] {
+	if len(query) < 2 || a.config.DisableFolderIndex {
+		return nil
+	}
+	status := a.fileIdx.Status()
+	if status.State != "ready" {
+		return nil
+	}
+	allScores := a.usage.AllScores()
+	dirScores := make(map[string]int, len(allScores))
+	for k, v := range allScores {
+		if strings.HasPrefix(k, "dir-open:") {
+			dirScores[strings.TrimPrefix(k, "dir-open:")] = v
+		}
+	}
+	dirResults := a.fileIdx.SearchDirs(query, dirScores)
+	limit := min(len(dirResults), max(3, a.maxResults()/2))
+	out := make([]search.Scored[SearchResult], 0, limit)
+	for i, d := range dirResults[:limit] {
+		// SearchDirs returns sorted by score; proxy rank via position
+		s := 5000 - i*50
+		if us := dirScores[d.Path]; us > 0 {
+			s += us
+		}
+		out = append(out, search.Scored[SearchResult]{
+			Item:  SearchResult{ID: "dir-open:" + d.Path, Title: d.Name, Subtitle: prettifyPath(d.Path), Category: "Folders", Path: d.Path},
+			Score: s,
+			Cat:   "Folders",
+		})
+	}
+	return out
+}
+
+// searchFilesScored returns file results with relevance scores.
+func (a *App) searchFilesScored(query string) []search.Scored[SearchResult] {
+	if len(query) < 2 {
+		return nil
+	}
+	status := a.fileIdx.Status()
+	if status.State != "ready" {
+		return nil
+	}
+	allScores := a.usage.AllScores()
+	fileScores := make(map[string]int, len(allScores))
+	for k, v := range allScores {
+		if strings.HasPrefix(k, "file-open:") {
+			fileScores[strings.TrimPrefix(k, "file-open:")] = v
+		}
+	}
+	fileResults := a.fileIdx.SearchFiles(query, fileScores)
+	limit := min(len(fileResults), a.maxResults())
+	out := make([]search.Scored[SearchResult], 0, limit)
+	for i, f := range fileResults[:limit] {
+		s := 4000 - i*50
+		if us := fileScores[f.Path]; us > 0 {
+			s += us
+		}
+		out = append(out, search.Scored[SearchResult]{
+			Item:  SearchResult{ID: "file-open:" + f.Path, Title: f.Name, Subtitle: prettifyPath(f.Dir), Category: "Files", Path: f.Path},
+			Score: s,
+			Cat:   "Files",
+		})
+	}
+	return out
 }
 
 func (a *App) searchFiles(query string) []SearchResult {
