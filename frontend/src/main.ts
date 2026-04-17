@@ -530,7 +530,7 @@ class Blight {
         this.searchHistory.hide();
         this.launcherEl.classList.remove('spotlight-mode');
         this.setLoading(true);
-        this.calcPreview.update(query);
+        void this.calcPreview.update(query);
         // Show filter pills only outside command mode
         if (isCommandMode) {
             this.filterPills.hide();
@@ -580,9 +580,18 @@ class Blight {
 
     renderResults(): void {
         const renderSeq = ++this.renderSeq;
-        this.launcherEl.classList.remove('spotlight-mode');
+        // Only leave spotlight-mode when a query is active; preserve it for home view.
+        if (this.currentQuery !== '') {
+            this.launcherEl.classList.remove('spotlight-mode');
+        }
 
         if (this.results.length === 0) {
+            if (this.currentQuery === '') {
+                // Empty spotlight state — fresh install / no apps indexed yet.
+                this.resultsContainer.innerHTML =
+                    '<div class="no-results"><div style="font-size:24px;opacity:0.3">⌕</div><div>Start typing to search…</div></div>';
+                return;
+            }
             const q = this.currentQuery;
             let emptyMsg = 'No results found';
             let emptyAction = '';
@@ -890,15 +899,23 @@ class Blight {
     // --- Footer hints ---
 
     updateFooterHints(result: main.SearchResult | null): void {
+        const primaryHint = document.getElementById('footer-hint-primary');
         const secondaryHint = document.getElementById('footer-hint-secondary');
-        if (!secondaryHint) return;
         if (!result) {
-            secondaryHint.classList.add('hidden');
+            if (primaryHint) primaryHint.innerHTML = `<kbd>↵</kbd> Open`;
+            secondaryHint?.classList.add('hidden');
             return;
         }
-        const secondaryLabel = this.getSecondaryActionLabel(result.id);
+        // Update primary label from backend metadata.
+        if (primaryHint && result.primaryActionLabel) {
+            primaryHint.innerHTML = `<kbd>↵</kbd> ${escapeHtml(result.primaryActionLabel)}`;
+        }
+        if (!secondaryHint) return;
+        // Prefer backend-provided label; fall back to legacy ID-based logic.
+        const secondaryLabel =
+            result.secondaryActionLabel || this.getSecondaryActionLabel(result.id);
         const secondaryId = this.getSecondaryActionId(result.id);
-        const hasSecondary = secondaryId !== null && secondaryId !== 'explorer';
+        const hasSecondary = !!(result.secondaryActionLabel || (secondaryId !== null && secondaryId !== 'explorer'));
         if (hasSecondary) {
             secondaryHint.innerHTML = `<kbd>Ctrl+↵</kbd> ${escapeHtml(secondaryLabel)}`;
             secondaryHint.classList.remove('hidden');

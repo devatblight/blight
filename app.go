@@ -36,18 +36,24 @@ type UpdateInfo struct {
 }
 
 type SearchResult struct {
-	ID       string `json:"id"`
-	Title    string `json:"title"`
-	Subtitle string `json:"subtitle"`
-	Icon     string `json:"icon"`
-	Category string `json:"category"`
-	Path     string `json:"path"`
+	ID                  string `json:"id"`
+	Title               string `json:"title"`
+	Subtitle            string `json:"subtitle"`
+	Icon                string `json:"icon"`
+	Category            string `json:"category"`
+	Path                string `json:"path"`
+	Kind                string `json:"kind"`
+	PrimaryActionLabel  string `json:"primaryActionLabel"`
+	SecondaryActionLabel string `json:"secondaryActionLabel,omitempty"`
+	SupportsActions     bool   `json:"supportsActions"`
 }
 
 type ContextAction struct {
-	ID    string `json:"id"`
-	Label string `json:"label"`
-	Icon  string `json:"icon"`
+	ID          string `json:"id"`
+	Label       string `json:"label"`
+	Icon        string `json:"icon"`
+	Shortcut    string `json:"shortcut,omitempty"`
+	Destructive bool   `json:"destructive,omitempty"`
 }
 
 type CommandDefinition struct {
@@ -62,6 +68,59 @@ type CommandDefinition struct {
 	RequiresArgument bool     `json:"requiresArgument"`
 	RunAsAdmin       bool     `json:"runAsAdmin"`
 	Pinned           bool     `json:"pinned"`
+}
+
+// enrichResult sets Kind, PrimaryActionLabel, SecondaryActionLabel, and
+// SupportsActions on a SearchResult based on its Category and ID.
+func enrichResult(r SearchResult) SearchResult {
+	switch r.Category {
+	case "Applications", "Pinned", "Recent", "Suggested":
+		r.Kind = "app"
+		r.PrimaryActionLabel = "Open"
+		r.SecondaryActionLabel = "Run as admin"
+		r.SupportsActions = true
+	case "Commands", "Aliases":
+		r.Kind = "command"
+		r.PrimaryActionLabel = "Run"
+		if !strings.HasPrefix(r.ID, "cmd-needs-arg:") {
+			r.SecondaryActionLabel = "Copy value"
+			r.SupportsActions = true
+		}
+	case "Files":
+		if r.ID == "no-results" {
+			return r
+		}
+		r.Kind = "file"
+		r.PrimaryActionLabel = "Open"
+		r.SecondaryActionLabel = "Show in Explorer"
+		r.SupportsActions = true
+	case "Folders":
+		r.Kind = "folder"
+		r.PrimaryActionLabel = "Open"
+		r.SecondaryActionLabel = "Open in Terminal"
+		r.SupportsActions = true
+	case "Clipboard":
+		r.Kind = "clipboard"
+		r.PrimaryActionLabel = "Copy"
+		r.SupportsActions = true
+	case "System":
+		r.Kind = "system"
+		r.PrimaryActionLabel = "Run"
+	case "Web":
+		r.Kind = "web"
+		r.PrimaryActionLabel = "Search"
+	case "Calculator":
+		r.Kind = "calc"
+		r.PrimaryActionLabel = "Copy result"
+	}
+	return r
+}
+
+func enrichResults(rs []SearchResult) []SearchResult {
+	for i := range rs {
+		rs[i] = enrichResult(rs[i])
+	}
+	return rs
 }
 
 type BlightConfig struct {
@@ -639,14 +698,14 @@ func (a *App) searchCommands(term string) []SearchResult {
 		}
 	}
 	if len(results) == 0 {
-		return []SearchResult{{
+		return enrichResults([]SearchResult{{
 			ID:       "web-search:" + term,
 			Title:    "Search the web for \"" + term + "\"",
 			Subtitle: "Opens in your default browser",
 			Category: "Web",
-		}}
+		}})
 	}
-	return results
+	return enrichResults(results)
 }
 
 func (a *App) Search(query string) []SearchResult {
@@ -734,12 +793,12 @@ func (a *App) Search(query string) []SearchResult {
 
 	if len(results) == 0 {
 		log.Debug("search no results — web fallback", map[string]interface{}{"query": query})
-		return []SearchResult{{
+		return enrichResults([]SearchResult{{
 			ID:       "web-search:" + query,
 			Title:    "Search the web for \"" + query + "\"",
 			Subtitle: "Opens in your default browser",
 			Category: "Web",
-		}}
+		}})
 	}
 
 	// Always append web search at the bottom
@@ -751,7 +810,7 @@ func (a *App) Search(query string) []SearchResult {
 	})
 
 	log.Debug("search", map[string]interface{}{"query": query, "results": len(results)})
-	return results
+	return enrichResults(results)
 }
 
 func (a *App) Execute(id string) string {
@@ -783,6 +842,7 @@ func (a *App) Execute(id string) string {
 	}
 
 	if strings.HasPrefix(id, "cmd-url:") {
+		a.usage.Record(id)
 		target := strings.TrimPrefix(id, "cmd-url:")
 		runtime.BrowserOpenURL(a.ctx, target)
 		runtime.WindowHide(a.ctx)
@@ -791,12 +851,14 @@ func (a *App) Execute(id string) string {
 	}
 
 	if strings.HasPrefix(id, "cmd-copy:") {
+		a.usage.Record(id)
 		text := strings.TrimPrefix(id, "cmd-copy:")
 		runtime.ClipboardSetText(a.ctx, text)
 		return "copied"
 	}
 
 	if strings.HasPrefix(id, "cmd-path:") {
+		a.usage.Record(id)
 		path := strings.TrimPrefix(id, "cmd-path:")
 		shellOpen(path)
 		runtime.WindowHide(a.ctx)
@@ -805,6 +867,7 @@ func (a *App) Execute(id string) string {
 	}
 
 	if strings.HasPrefix(id, "cmd-shell:") {
+		a.usage.Record(id)
 		cmd := strings.TrimPrefix(id, "cmd-shell:")
 		var c *exec.Cmd
 		if goruntime.GOOS == "windows" {
@@ -853,6 +916,7 @@ func (a *App) Execute(id string) string {
 	}
 
 	if strings.HasPrefix(id, "sys-") {
+		a.usage.Record(id)
 		sysID := strings.TrimPrefix(id, "sys-")
 		if err := commands.ExecuteSystemCommand(sysID); err != nil {
 			return err.Error()
@@ -978,38 +1042,38 @@ func (a *App) GetContextActions(id string) []ContextAction {
 	switch {
 	case strings.HasPrefix(id, "dir-open:"):
 		return []ContextAction{
-			{ID: "open", Label: "Open", Icon: icon("\uE768", "▶")},
-			{ID: "terminal", Label: "Open in Terminal", Icon: icon("\uE756", "⌨")},
+			{ID: "open", Label: "Open", Icon: icon("\uE768", "▶"), Shortcut: "↵"},
+			{ID: "terminal", Label: "Open in Terminal", Icon: icon("\uE756", "⌨"), Shortcut: "⌃↵"},
 			{ID: "copy-path", Label: "Copy Path", Icon: icon("\uE8C8", "📋")},
 		}
 	case strings.HasPrefix(id, "file-open:"):
 		return []ContextAction{
-			{ID: "open", Label: "Open", Icon: icon("\uE768", "▶")},
-			{ID: "explorer", Label: revealLabel(), Icon: icon("\uE8B7", "📂")},
+			{ID: "open", Label: "Open", Icon: icon("\uE768", "▶"), Shortcut: "↵"},
+			{ID: "explorer", Label: revealLabel(), Icon: icon("\uE8B7", "📂"), Shortcut: "⌃↵"},
 			{ID: "copy-path", Label: "Copy Path", Icon: icon("\uE8C8", "📋")},
 			{ID: "copy-name", Label: "Copy Name", Icon: icon("\uE70F", "📝")},
 		}
 	case strings.HasPrefix(id, "clip-"):
 		return []ContextAction{
-			{ID: "copy", Label: "Copy", Icon: icon("\uE8C8", "📋")},
-			{ID: "delete", Label: "Delete", Icon: icon("\uE74D", "🗑️")},
+			{ID: "copy", Label: "Copy", Icon: icon("\uE8C8", "📋"), Shortcut: "↵"},
+			{ID: "delete", Label: "Delete", Icon: icon("\uE74D", "🗑️"), Destructive: true},
 		}
 	case strings.HasPrefix(id, "sys-"):
 		return []ContextAction{
-			{ID: "run", Label: "Run", Icon: icon("\uE768", "▶")},
+			{ID: "run", Label: "Run", Icon: icon("\uE768", "▶"), Shortcut: "↵"},
 		}
 	case strings.HasPrefix(id, "cmd-url:") || strings.HasPrefix(id, "cmd-copy:") || strings.HasPrefix(id, "cmd-path:") || strings.HasPrefix(id, "cmd-shell:"):
 		return []ContextAction{
-			{ID: "run", Label: "Run", Icon: icon("\uE768", "▶")},
-			{ID: "copy", Label: "Copy Value", Icon: icon("\uE8C8", "📋")},
+			{ID: "run", Label: "Run", Icon: icon("\uE768", "▶"), Shortcut: "↵"},
+			{ID: "copy", Label: "Copy Value", Icon: icon("\uE8C8", "📋"), Shortcut: "⌃↵"},
 		}
 	case strings.HasPrefix(id, "cmd-needs-arg:"):
 		return []ContextAction{}
 	case strings.HasPrefix(id, "alias:"):
 		return []ContextAction{
-			{ID: "open", Label: "Use", Icon: icon("\uE768", "▶")},
-			{ID: "copy", Label: "Copy Expansion", Icon: icon("\uE8C8", "📋")},
-			{ID: "delete-alias", Label: "Delete Alias", Icon: icon("\uE74D", "🗑️")},
+			{ID: "open", Label: "Use", Icon: icon("\uE768", "▶"), Shortcut: "↵"},
+			{ID: "copy", Label: "Copy Expansion", Icon: icon("\uE8C8", "📋"), Shortcut: "⌃↵"},
+			{ID: "delete-alias", Label: "Delete Alias", Icon: icon("\uE74D", "🗑️"), Destructive: true},
 		}
 	case id == "calc-result" || id == "no-results" || strings.HasPrefix(id, "web-search:"):
 		return []ContextAction{}
@@ -1025,8 +1089,8 @@ func (a *App) GetContextActions(id string) []ContextAction {
 			}
 		}
 		return []ContextAction{
-			{ID: "open", Label: "Open", Icon: icon("\uE768", "▶")},
-			{ID: "admin", Label: elevateLabel(), Icon: icon("\uE7EF", "🛡️")},
+			{ID: "open", Label: "Open", Icon: icon("\uE768", "▶"), Shortcut: "↵"},
+			{ID: "admin", Label: elevateLabel(), Icon: icon("\uE7EF", "🛡️"), Shortcut: "⌃↵"},
 			{ID: "explorer", Label: revealLabel(), Icon: icon("\uE8B7", "📂")},
 			{ID: "copy-path", Label: "Copy Path", Icon: icon("\uE8C8", "📋")},
 			{ID: "pin", Label: pinLabel, Icon: pinIcon},
@@ -1248,6 +1312,19 @@ func (a *App) ImportSettings(data string) error {
 	return a.saveConfig()
 }
 
+// EvalCalc evaluates a simple arithmetic expression and returns the result as a
+// string, or an empty string on error. Delegates to internal/commands/calculator.go.
+func (a *App) EvalCalc(expr string) string {
+	if !commands.IsCalcQuery(expr) {
+		return ""
+	}
+	result := commands.Evaluate(expr)
+	if !result.Valid {
+		return ""
+	}
+	return result.Result
+}
+
 // GetUsageScores returns a map of item ID → decayed usage score for items with
 // at least one recorded use. Used by the frontend to show frequency indicators.
 func (a *App) GetUsageScores() map[string]int {
@@ -1392,7 +1469,11 @@ func (a *App) searchCommandsScored(query string) []search.Scored[SearchResult] {
 			s = 8000 // exact keyword match
 		}
 		if cmd.Pinned {
-			s += 1000
+			s += 3000
+		}
+		// Boost by past usage (decayed score for the resolved execution ID).
+		if id != "cmd-needs-arg:"+cmd.ID {
+			s += a.usage.Score(id)
 		}
 		out = append(out, search.Scored[SearchResult]{
 			Item:  SearchResult{ID: id, Title: cmd.Title, Subtitle: subtitle, Icon: cmd.Icon, Category: "Commands"},
@@ -1433,6 +1514,7 @@ func (a *App) searchSystemCommandsScored(query string) []search.Scored[SearchRes
 		if !matched {
 			continue
 		}
+		s += a.usage.Score("sys-" + cmd.ID)
 		out = append(out, search.Scored[SearchResult]{
 			Item:  SearchResult{ID: "sys-" + cmd.ID, Title: cmd.Name, Subtitle: cmd.Subtitle, Icon: cmd.Icon, Category: "System"},
 			Score: s,
@@ -1610,7 +1692,7 @@ func (a *App) getDefaultResults() []SearchResult {
 				title = title[:60] + "…"
 			}
 			results = append(results, SearchResult{
-				ID:       fmt.Sprintf("clipboard:%d", i),
+				ID:       fmt.Sprintf("clip-%d", i),
 				Title:    title,
 				Subtitle: "Clipboard",
 				Category: "Clipboard",
@@ -1618,7 +1700,7 @@ func (a *App) getDefaultResults() []SearchResult {
 		}
 	}
 
-	return results
+	return enrichResults(results)
 }
 
 // searchPath handles path-browser mode. Triggered by queries starting with ~
@@ -1712,7 +1794,7 @@ func (a *App) searchPath(query string) []SearchResult {
 			Category: "Files",
 		}}
 	}
-	return results
+	return enrichResults(results)
 }
 
 func prettifyPath(path string) string {

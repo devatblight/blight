@@ -23,6 +23,38 @@ export namespace files {
 
 export namespace main {
 	
+	export class CommandDefinition {
+	    id: string;
+	    title: string;
+	    keyword: string;
+	    description: string;
+	    actionType: string;
+	    template: string;
+	    keywords?: string[];
+	    icon?: string;
+	    requiresArgument: boolean;
+	    runAsAdmin: boolean;
+	    pinned: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new CommandDefinition(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.keyword = source["keyword"];
+	        this.description = source["description"];
+	        this.actionType = source["actionType"];
+	        this.template = source["template"];
+	        this.keywords = source["keywords"];
+	        this.icon = source["icon"];
+	        this.requiresArgument = source["requiresArgument"];
+	        this.runAsAdmin = source["runAsAdmin"];
+	        this.pinned = source["pinned"];
+	    }
+	}
 	export class BlightConfig {
 	    firstRun: boolean;
 	    hotkey: string;
@@ -43,7 +75,9 @@ export namespace main {
 	    // Go type: time
 	    lastIndexedAt?: any;
 	    disableFolderIndex?: boolean;
+	    searchEngineURL?: string;
 	    aliases?: Record<string, string>;
+	    commands?: CommandDefinition[];
 	    pinnedItems?: string[];
 	
 	    static createFrom(source: any = {}) {
@@ -70,7 +104,9 @@ export namespace main {
 	        this.hideNotifyIcon = source["hideNotifyIcon"];
 	        this.lastIndexedAt = this.convertValues(source["lastIndexedAt"], null);
 	        this.disableFolderIndex = source["disableFolderIndex"];
+	        this.searchEngineURL = source["searchEngineURL"];
 	        this.aliases = source["aliases"];
+	        this.commands = this.convertValues(source["commands"], CommandDefinition);
 	        this.pinnedItems = source["pinnedItems"];
 	    }
 	
@@ -92,10 +128,13 @@ export namespace main {
 		    return a;
 		}
 	}
+	
 	export class ContextAction {
 	    id: string;
 	    label: string;
 	    icon: string;
+	    shortcut?: string;
+	    destructive?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new ContextAction(source);
@@ -106,6 +145,8 @@ export namespace main {
 	        this.id = source["id"];
 	        this.label = source["label"];
 	        this.icon = source["icon"];
+	        this.shortcut = source["shortcut"];
+	        this.destructive = source["destructive"];
 	    }
 	}
 	export class SearchResult {
@@ -115,6 +156,10 @@ export namespace main {
 	    icon: string;
 	    category: string;
 	    path: string;
+	    kind: string;
+	    primaryActionLabel: string;
+	    secondaryActionLabel?: string;
+	    supportsActions: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new SearchResult(source);
@@ -128,6 +173,10 @@ export namespace main {
 	        this.icon = source["icon"];
 	        this.category = source["category"];
 	        this.path = source["path"];
+	        this.kind = source["kind"];
+	        this.primaryActionLabel = source["primaryActionLabel"];
+	        this.secondaryActionLabel = source["secondaryActionLabel"];
+	        this.supportsActions = source["supportsActions"];
 	    }
 	}
 	export class UpdateInfo {

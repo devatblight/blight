@@ -19,6 +19,9 @@ import {
     SaveAlias,
     DeleteAlias,
     OpenURL,
+    GetCommands,
+    SaveCommand,
+    DeleteCommand,
 } from '../../wailsjs/go/main/App';
 import { marked, Renderer } from 'marked';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
@@ -154,6 +157,9 @@ export class Settings {
 
             // Aliases tab
             this._loadAliasesTab();
+
+            // Commands tab
+            this._loadCommandsTab();
         } catch (e) {
             // eslint-disable-next-line no-console
             console.error('Failed to load settings:', e);
@@ -187,6 +193,7 @@ export class Settings {
         this._bindTabKeyNav();
         this._bindAliasAdd();
         this._bindHotkeyBadge();
+        this._bindCommandsTab();
 
         document.getElementById('settings-close')?.addEventListener('click', () => this.close());
         document.getElementById('settings-cancel')?.addEventListener('click', () => this.close());
@@ -755,6 +762,193 @@ export class Settings {
         });
         document.querySelectorAll<HTMLElement>('.settings-nav-item').forEach((btn) => {
             if (!btn.getAttribute('tabindex')) btn.setAttribute('tabindex', '0');
+        });
+    }
+
+    // ── Commands tab ──────────────────────────────────────────────────────────
+
+    private _editingCommandId: string | null = null;
+
+    private async _loadCommandsTab(): Promise<void> {
+        try {
+            const cmds = await GetCommands();
+            this._renderCommands(cmds);
+        } catch {
+            /* non-critical */
+        }
+    }
+
+    private _renderCommands(cmds: main.CommandDefinition[]): void {
+        const list = document.getElementById('commands-list');
+        if (!list) return;
+        if (cmds.length === 0) {
+            list.innerHTML =
+                '<div style="font-size:11px;color:var(--text-tertiary);padding:8px 0">No commands yet. Click "Add command" to create one.</div>';
+            return;
+        }
+        const actionTypeLabel: Record<string, string> = {
+            open_url: 'URL',
+            copy_text: 'Copy',
+            open_path: 'Path',
+            run_shell: 'Shell',
+        };
+        list.innerHTML = cmds
+            .map(
+                (cmd) => `
+            <div class="cmd-item" data-id="${escapeHtml(cmd.id)}">
+                <span class="cmd-keyword">${escapeHtml(cmd.keyword)}</span>
+                <span class="cmd-title">${escapeHtml(cmd.title)}</span>
+                <span class="cmd-type-badge">${actionTypeLabel[cmd.actionType] ?? cmd.actionType}</span>
+                ${cmd.pinned ? '<span class="cmd-pin-badge">📌</span>' : ''}
+                <div class="cmd-item-actions">
+                    <button class="cmd-edit-btn" data-id="${escapeHtml(cmd.id)}" title="Edit">✏️</button>
+                    <button class="cmd-dup-btn" data-id="${escapeHtml(cmd.id)}" title="Duplicate">📋</button>
+                    <button class="cmd-del-btn" data-id="${escapeHtml(cmd.id)}" title="Delete">🗑️</button>
+                </div>
+            </div>
+        `
+            )
+            .join('');
+
+        list.querySelectorAll<HTMLElement>('.cmd-edit-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const id = btn.dataset['id'] ?? '';
+                const cmd = cmds.find((c) => c.id === id);
+                if (cmd) this._openCommandForm(cmd);
+            });
+        });
+
+        list.querySelectorAll<HTMLElement>('.cmd-dup-btn').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                const id = btn.dataset['id'] ?? '';
+                const cmd = cmds.find((c) => c.id === id);
+                if (!cmd) return;
+                const dup = { ...cmd, id: crypto.randomUUID(), title: cmd.title + ' (copy)', keyword: cmd.keyword + '2' };
+                try {
+                    await SaveCommand(dup);
+                    await this._loadCommandsTab();
+                    this.deps.showToast('Command duplicated', dup.title, 'success');
+                } catch (e) {
+                    this.deps.showToast('Duplicate failed', String(e), 'error');
+                }
+            });
+        });
+
+        list.querySelectorAll<HTMLElement>('.cmd-del-btn').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                const id = btn.dataset['id'] ?? '';
+                const cmd = cmds.find((c) => c.id === id);
+                const confirmed = await showConfirmModal(
+                    `Delete "${cmd?.title ?? id}"?`,
+                    'This cannot be undone.'
+                );
+                if (!confirmed) return;
+                try {
+                    await DeleteCommand(id);
+                    await this._loadCommandsTab();
+                    this.deps.showToast('Command deleted', cmd?.title ?? id, 'info');
+                } catch (e) {
+                    this.deps.showToast('Delete failed', String(e), 'error');
+                }
+            });
+        });
+    }
+
+    private _openCommandForm(cmd?: main.CommandDefinition): void {
+        this._editingCommandId = cmd?.id ?? null;
+
+        const form = document.getElementById('cmd-form');
+        const formTitle = document.getElementById('cmd-form-title');
+        if (!form || !formTitle) return;
+
+        formTitle.textContent = cmd ? 'Edit Command' : 'New Command';
+
+        (document.getElementById('cmd-field-title') as HTMLInputElement).value = cmd?.title ?? '';
+        (document.getElementById('cmd-field-keyword') as HTMLInputElement).value = cmd?.keyword ?? '';
+        (document.getElementById('cmd-field-description') as HTMLInputElement).value = cmd?.description ?? '';
+        (document.getElementById('cmd-field-template') as HTMLInputElement).value = cmd?.template ?? '';
+        (document.getElementById('cmd-field-actionType') as HTMLSelectElement).value = cmd?.actionType ?? 'open_url';
+        const reqArg = document.getElementById('cmd-field-requiresArgument') as HTMLElement & { checked?: boolean };
+        if (reqArg) reqArg.checked = cmd?.requiresArgument ?? false;
+        const pinned = document.getElementById('cmd-field-pinned') as HTMLElement & { checked?: boolean };
+        if (pinned) pinned.checked = cmd?.pinned ?? false;
+
+        const errEl = document.getElementById('cmd-validation-error');
+        if (errEl) errEl.classList.add('hidden');
+
+        this._updateShellWarning();
+        form.classList.remove('hidden');
+        (document.getElementById('cmd-field-title') as HTMLInputElement)?.focus();
+    }
+
+    private _updateShellWarning(): void {
+        const type = (document.getElementById('cmd-field-actionType') as HTMLSelectElement)?.value;
+        document.getElementById('cmd-shell-warning')?.classList.toggle('hidden', type !== 'run_shell');
+    }
+
+    private _bindCommandsTab(): void {
+        document.getElementById('cmd-add-btn')?.addEventListener('click', () => {
+            this._openCommandForm();
+        });
+
+        document.getElementById('cmd-field-actionType')?.addEventListener('change', () => {
+            this._updateShellWarning();
+        });
+
+        document.getElementById('cmd-form-cancel')?.addEventListener('click', () => {
+            document.getElementById('cmd-form')?.classList.add('hidden');
+            this._editingCommandId = null;
+        });
+
+        document.getElementById('cmd-form-save')?.addEventListener('click', async () => {
+            const title = (document.getElementById('cmd-field-title') as HTMLInputElement)?.value.trim();
+            const keyword = (document.getElementById('cmd-field-keyword') as HTMLInputElement)?.value.trim();
+            const description = (document.getElementById('cmd-field-description') as HTMLInputElement)?.value.trim();
+            const template = (document.getElementById('cmd-field-template') as HTMLInputElement)?.value.trim();
+            const actionType = (document.getElementById('cmd-field-actionType') as HTMLSelectElement)?.value;
+            const requiresArgument = !!((document.getElementById('cmd-field-requiresArgument') as HTMLElement & { checked?: boolean })?.checked);
+            const pinnedEl = document.getElementById('cmd-field-pinned') as HTMLElement & { checked?: boolean };
+            const pinned = !!(pinnedEl?.checked);
+
+            const errEl = document.getElementById('cmd-validation-error');
+
+            const showError = (msg: string) => {
+                if (errEl) { errEl.textContent = msg; errEl.classList.remove('hidden'); }
+            };
+
+            if (!title) return showError('Title is required.');
+            if (!keyword) return showError('Keyword is required.');
+            if (!template) return showError('Template is required.');
+
+            if (actionType === 'open_url') {
+                const isAbsURL = /^https?:\/\//i.test(template);
+                const hasQuery = template.includes('{{query}}');
+                if (!isAbsURL && !hasQuery) {
+                    return showError('For Open URL, template must be an absolute URL (https://…) or contain {{query}}.');
+                }
+            }
+
+            const cmd: main.CommandDefinition = {
+                id: this._editingCommandId ?? crypto.randomUUID(),
+                title,
+                keyword,
+                description,
+                actionType,
+                template,
+                requiresArgument,
+                runAsAdmin: false,
+                pinned,
+            };
+
+            try {
+                await SaveCommand(cmd);
+                document.getElementById('cmd-form')?.classList.add('hidden');
+                this._editingCommandId = null;
+                await this._loadCommandsTab();
+                this.deps.showToast('Command saved', title, 'success');
+            } catch (e) {
+                showError(`Save failed: ${e}`);
+            }
         });
     }
 }

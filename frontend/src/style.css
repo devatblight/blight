@@ -429,6 +429,15 @@ body {
     border-color: var(--border-focus);
 }
 
+.context-action--destructive .context-action-label,
+.context-action--destructive .context-action-icon {
+    color: #e05252;
+}
+.context-action--destructive:hover,
+.context-action--destructive.kb-selected {
+    background: rgba(224, 82, 82, 0.08);
+}
+
 /* === Footer === */
 
 .footer {
@@ -2398,6 +2407,110 @@ html.no-animations *::after {
 .alias-remove:hover {
     background: rgba(248, 113, 113, 0.1);
     color: #f87171;
+}
+
+/* === Commands tab === */
+
+.commands-list {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+.cmd-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    font-size: 12px;
+}
+
+.cmd-keyword {
+    font-weight: 600;
+    color: var(--accent);
+    min-width: 48px;
+    flex-shrink: 0;
+}
+
+.cmd-title {
+    flex: 1;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cmd-type-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    flex-shrink: 0;
+}
+
+.cmd-pin-badge {
+    font-size: 11px;
+    flex-shrink: 0;
+}
+
+.cmd-item-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.cmd-edit-btn,
+.cmd-dup-btn,
+.cmd-del-btn {
+    font-size: 12px;
+    cursor: pointer;
+    padding: 2px 5px;
+    border-radius: 3px;
+    border: none;
+    background: none;
+    transition: background var(--transition-fast);
+}
+
+.cmd-edit-btn:hover { background: var(--bg-hover); }
+.cmd-dup-btn:hover  { background: var(--bg-hover); }
+.cmd-del-btn:hover  { background: rgba(248, 113, 113, 0.1); }
+
+.cmd-form {
+    margin-top: 12px;
+}
+
+.cmd-shell-warning {
+    font-size: 11px;
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    border-radius: var(--radius-sm);
+    padding: 6px 10px;
+    margin: 4px 0;
+}
+
+.cmd-validation-error {
+    font-size: 11px;
+    color: #e05252;
+    background: rgba(224, 82, 82, 0.08);
+    border: 1px solid rgba(224, 82, 82, 0.25);
+    border-radius: var(--radius-sm);
+    padding: 6px 10px;
+    margin: 4px 0;
+}
+
+.cmd-form-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
 }
 
 /* === What's New Badge === */

@@ -92,11 +92,13 @@ export class ContextMenu {
         }
         this.actions.forEach((action, idx) => {
             const kbClass = idx === this.selectedIndex ? ' kb-selected' : '';
-            let shortcutHtml = '';
-            if (idx === 0) shortcutHtml = `<kbd class="context-action-shortcut">↵</kbd>`;
-            else if (idx === 1) shortcutHtml = `<kbd class="context-action-shortcut">⌃↵</kbd>`;
+            const destructiveClass = action.destructive ? ' context-action--destructive' : '';
+            const shortcut = action.shortcut ?? '';
+            const shortcutHtml = shortcut
+                ? `<kbd class="context-action-shortcut">${escapeHtml(shortcut)}</kbd>`
+                : '';
             html += `
-                <button class="context-action${kbClass}" data-action="${action.id}" data-idx="${idx}">
+                <button class="context-action${kbClass}${destructiveClass}" data-action="${action.id}" data-idx="${idx}">
                     <span class="context-action-icon">${action.icon}</span>
                     <span class="context-action-label">${escapeHtml(action.label)}</span>
                     ${shortcutHtml}

@@ -1,3 +1,5 @@
+import { EvalCalc } from '../../wailsjs/go/main/App';
+
 export class CalcPreview {
     private el: HTMLElement;
 
@@ -5,23 +7,16 @@ export class CalcPreview {
         this.el = el;
     }
 
-    update(query: string): void {
-        const calcRegex = /^[\d\s+\-*/().]+$/;
-        if (calcRegex.test(query) && /[+\-*/]/.test(query)) {
-            try {
-                const result = Function('"use strict"; return (' + query + ')')();
-                if (typeof result === 'number' && isFinite(result)) {
-                    this.el.textContent =
-                        '= ' +
-                        (Number.isInteger(result)
-                            ? result.toString()
-                            : result.toFixed(6).replace(/\.?0+$/, ''));
-                    this.el.setAttribute('aria-hidden', 'false');
-                    return;
-                }
-            } catch {
-                /* ignore */
+    async update(query: string): Promise<void> {
+        try {
+            const result = await EvalCalc(query);
+            if (result) {
+                this.el.textContent = '= ' + result;
+                this.el.setAttribute('aria-hidden', 'false');
+                return;
             }
+        } catch {
+            /* non-critical */
         }
         this.clear();
     }

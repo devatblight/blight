@@ -286,6 +286,7 @@
           <button class="settings-nav-item" data-tab="system"><span class="nav-item-icon win-icon">&#xE770;</span>System</button>
           <button class="settings-nav-item" data-tab="files"><span class="nav-item-icon win-icon">&#xE8B7;</span>File Index</button>
           <button class="settings-nav-item" data-tab="aliases"><span class="nav-item-icon win-icon">&#xE71B;</span>Aliases</button>
+          <button class="settings-nav-item" data-tab="commands"><span class="nav-item-icon win-icon">&#xE756;</span>Commands</button>
           <button class="settings-nav-item" data-tab="updates"><span class="nav-item-icon win-icon">&#xE895;</span>Updates</button>
           <button class="settings-nav-item" data-tab="misc"><span class="nav-item-icon win-icon">&#xE712;</span>Misc</button>
         </nav>
@@ -562,6 +563,96 @@
               </div>
 
               <div id="aliases-list" class="aliases-list"></div>
+            </div>
+          </div>
+
+          <!-- === TAB: Commands === -->
+          <div class="settings-tab hidden" id="tab-commands">
+            <div class="settings-section-group">
+              <div class="settings-group-label">Commands</div>
+
+              <div class="settings-row-item">
+                <div class="settings-row-info">
+                  <div class="settings-row-name">Keyword shortcuts</div>
+                  <div class="settings-row-desc">Type a keyword in the launcher to run a URL, copy text, open a path, or run a shell command</div>
+                </div>
+                <div class="settings-row-control">
+                  <fluent-button id="cmd-add-btn" appearance="accent">Add command</fluent-button>
+                </div>
+              </div>
+
+              <div id="commands-list" class="commands-list"></div>
+            </div>
+
+            <!-- Inline add/edit form (hidden by default) -->
+            <div id="cmd-form" class="cmd-form hidden">
+              <div class="settings-section-group">
+                <div class="settings-group-label" id="cmd-form-title">New Command</div>
+
+                <div class="settings-row-item">
+                  <div class="settings-row-info"><div class="settings-row-name">Title</div></div>
+                  <div class="settings-row-control">
+                    <input id="cmd-field-title" class="settings-input settings-input-wide" type="text" placeholder="e.g. Google Search" maxlength="64" />
+                  </div>
+                </div>
+
+                <div class="settings-row-item">
+                  <div class="settings-row-info"><div class="settings-row-name">Keyword</div></div>
+                  <div class="settings-row-control">
+                    <input id="cmd-field-keyword" class="settings-input" type="text" placeholder="e.g. g" maxlength="32" />
+                  </div>
+                </div>
+
+                <div class="settings-row-item">
+                  <div class="settings-row-info"><div class="settings-row-name">Description</div></div>
+                  <div class="settings-row-control">
+                    <input id="cmd-field-description" class="settings-input settings-input-wide" type="text" placeholder="Optional description" maxlength="128" />
+                  </div>
+                </div>
+
+                <div class="settings-row-item">
+                  <div class="settings-row-info"><div class="settings-row-name">Action Type</div></div>
+                  <div class="settings-row-control">
+                    <select id="cmd-field-actionType" class="settings-select">
+                      <option value="open_url">Open URL</option>
+                      <option value="copy_text">Copy Text</option>
+                      <option value="open_path">Open Path</option>
+                      <option value="run_shell">Run Shell</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="settings-row-item">
+                  <div class="settings-row-info">
+                    <div class="settings-row-name">Template</div>
+                    <div class="settings-row-desc" id="cmd-template-hint">Use <code>{{query}}</code> where the typed argument should go</div>
+                  </div>
+                  <div class="settings-row-control">
+                    <input id="cmd-field-template" class="settings-input settings-input-wide" type="text" placeholder="e.g. https://google.com/search?q={{query}}" maxlength="512" />
+                  </div>
+                </div>
+
+                <div id="cmd-shell-warning" class="cmd-shell-warning hidden">
+                  ⚠ Runs locally and unsandboxed — only use commands you trust.
+                </div>
+
+                <div class="settings-row-item">
+                  <div class="settings-row-info"><div class="settings-row-name">Requires argument</div><div class="settings-row-desc">Block execution until the user types an argument</div></div>
+                  <div class="settings-row-control"><fluent-checkbox id="cmd-field-requiresArgument"></fluent-checkbox></div>
+                </div>
+
+                <div class="settings-row-item">
+                  <div class="settings-row-info"><div class="settings-row-name">Pin to top</div></div>
+                  <div class="settings-row-control"><fluent-checkbox id="cmd-field-pinned"></fluent-checkbox></div>
+                </div>
+
+                <div id="cmd-validation-error" class="cmd-validation-error hidden"></div>
+
+                <div class="cmd-form-actions">
+                  <fluent-button id="cmd-form-save" appearance="accent">Save</fluent-button>
+                  <fluent-button id="cmd-form-cancel">Cancel</fluent-button>
+                </div>
+              </div>
             </div>
           </div>
 

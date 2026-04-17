@@ -26,6 +26,14 @@ export function DeleteAlias(arg1) {
   return window['go']['main']['App']['DeleteAlias'](arg1);
 }
 
+export function DeleteCommand(arg1) {
+  return window['go']['main']['App']['DeleteCommand'](arg1);
+}
+
+export function EvalCalc(arg1) {
+  return window['go']['main']['App']['EvalCalc'](arg1);
+}
+
 export function Execute(arg1) {
   return window['go']['main']['App']['Execute'](arg1);
 }
@@ -40,6 +48,10 @@ export function ExportSettings() {
 
 export function GetAliases() {
   return window['go']['main']['App']['GetAliases']();
+}
+
+export function GetCommands() {
+  return window['go']['main']['App']['GetCommands']();
 }
 
 export function GetConfig() {
@@ -124,6 +136,10 @@ export function ReindexFiles() {
 
 export function SaveAlias(arg1, arg2) {
   return window['go']['main']['App']['SaveAlias'](arg1, arg2);
+}
+
+export function SaveCommand(arg1) {
+  return window['go']['main']['App']['SaveCommand'](arg1);
 }
 
 export function SaveSettings(arg1) {
