@@ -73,6 +73,9 @@ class Blight {
     private isHiding = false;
     private focusRequestId = 0;
 
+    // Command mode state
+    private commandModeBadge: HTMLElement | null = null;
+
     // Icon cache
     private iconCache: Map<string, string> = new Map();
     private renderSeq = 0;
@@ -101,6 +104,7 @@ class Blight {
     private systemNotifs: SystemNotifications;
 
     constructor() {
+        this.commandModeBadge = document.getElementById('command-mode-badge');
         this.searchInput = document.getElementById('search-input') as HTMLInputElement;
         this.resultsContainer = document.getElementById('results')!;
         this.splashEl = document.getElementById('splash')!;
@@ -501,10 +505,16 @@ class Blight {
 
     // --- Search ---
 
+    private setCommandMode(active: boolean): void {
+        this.commandModeBadge?.classList.toggle('hidden', !active);
+        this.launcherEl.classList.toggle('command-mode', active);
+    }
+
     onSearchInput(): void {
         clearTimeout(this.debounceTimer ?? undefined);
         const query = this.visibleQuery();
         if (!query) {
+            this.setCommandMode(false);
             this.setLoading(false);
             this.loadDefaultResults();
             this.calcPreview.clear();
@@ -515,12 +525,18 @@ class Blight {
             this.filterPills.hide();
             return;
         }
+        const isCommandMode = query.startsWith('>');
+        this.setCommandMode(isCommandMode);
         this.searchHistory.hide();
         this.launcherEl.classList.remove('spotlight-mode');
         this.setLoading(true);
         this.calcPreview.update(query);
-        // Show filter pills once the user starts typing
-        this.filterPills.render(this.activeFilter);
+        // Show filter pills only outside command mode
+        if (isCommandMode) {
+            this.filterPills.hide();
+        } else {
+            this.filterPills.render(this.activeFilter);
+        }
         this.debounceTimer = setTimeout(async () => {
             const seq = ++this.searchSeq;
             const results = await Search(query);
@@ -534,17 +550,26 @@ class Blight {
         }, this.searchDelay);
     }
 
-    loadDefaultResults(): void {
-        this.searchSeq++;
+    async loadDefaultResults(): Promise<void> {
+        const seq = ++this.searchSeq;
         this.currentQuery = '';
         this.results = [];
         this._displayResults = [];
         this.selectedIndex = 0;
         this.resultsContainer.innerHTML = '';
+        this.setCommandMode(false);
         this.launcherEl.classList.add('spotlight-mode');
         this.updateFooterHints(null);
         this._applyFooterHintsVisibility(false);
         this.calcPreview.clear();
+
+        const homeResults = await Search('');
+        if (seq !== this.searchSeq) return;
+        if (homeResults.length > 0) {
+            this.results = homeResults;
+            this.searchHistory.hide();
+            this.renderResults();
+        }
     }
 
     setLoading(loading: boolean): void {
