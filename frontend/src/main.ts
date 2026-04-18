@@ -915,7 +915,10 @@ class Blight {
         const secondaryLabel =
             result.secondaryActionLabel || this.getSecondaryActionLabel(result.id);
         const secondaryId = this.getSecondaryActionId(result.id);
-        const hasSecondary = !!(result.secondaryActionLabel || (secondaryId !== null && secondaryId !== 'explorer'));
+        const hasSecondary = !!(
+            result.secondaryActionLabel ||
+            (secondaryId !== null && secondaryId !== 'explorer')
+        );
         if (hasSecondary) {
             secondaryHint.innerHTML = `<kbd>Ctrl+↵</kbd> ${escapeHtml(secondaryLabel)}`;
             secondaryHint.classList.remove('hidden');

@@ -823,7 +823,12 @@ export class Settings {
                 const id = btn.dataset['id'] ?? '';
                 const cmd = cmds.find((c) => c.id === id);
                 if (!cmd) return;
-                const dup = { ...cmd, id: crypto.randomUUID(), title: cmd.title + ' (copy)', keyword: cmd.keyword + '2' };
+                const dup = {
+                    ...cmd,
+                    id: crypto.randomUUID(),
+                    title: cmd.title + ' (copy)',
+                    keyword: cmd.keyword + '2',
+                };
                 try {
                     await SaveCommand(dup);
                     await this._loadCommandsTab();
@@ -867,13 +872,21 @@ export class Settings {
         formTitle.textContent = cmd ? 'Edit Command' : 'New Command';
 
         (document.getElementById('cmd-field-title') as HTMLInputElement).value = cmd?.title ?? '';
-        (document.getElementById('cmd-field-keyword') as HTMLInputElement).value = cmd?.keyword ?? '';
-        (document.getElementById('cmd-field-description') as HTMLInputElement).value = cmd?.description ?? '';
-        (document.getElementById('cmd-field-template') as HTMLInputElement).value = cmd?.template ?? '';
-        (document.getElementById('cmd-field-actionType') as HTMLSelectElement).value = cmd?.actionType ?? 'open_url';
-        const reqArg = document.getElementById('cmd-field-requiresArgument') as HTMLElement & { checked?: boolean };
+        (document.getElementById('cmd-field-keyword') as HTMLInputElement).value =
+            cmd?.keyword ?? '';
+        (document.getElementById('cmd-field-description') as HTMLInputElement).value =
+            cmd?.description ?? '';
+        (document.getElementById('cmd-field-template') as HTMLInputElement).value =
+            cmd?.template ?? '';
+        (document.getElementById('cmd-field-actionType') as HTMLSelectElement).value =
+            cmd?.actionType ?? 'open_url';
+        const reqArg = document.getElementById('cmd-field-requiresArgument') as HTMLElement & {
+            checked?: boolean;
+        };
         if (reqArg) reqArg.checked = cmd?.requiresArgument ?? false;
-        const pinned = document.getElementById('cmd-field-pinned') as HTMLElement & { checked?: boolean };
+        const pinned = document.getElementById('cmd-field-pinned') as HTMLElement & {
+            checked?: boolean;
+        };
         if (pinned) pinned.checked = cmd?.pinned ?? false;
 
         const errEl = document.getElementById('cmd-validation-error');
@@ -886,7 +899,9 @@ export class Settings {
 
     private _updateShellWarning(): void {
         const type = (document.getElementById('cmd-field-actionType') as HTMLSelectElement)?.value;
-        document.getElementById('cmd-shell-warning')?.classList.toggle('hidden', type !== 'run_shell');
+        document
+            .getElementById('cmd-shell-warning')
+            ?.classList.toggle('hidden', type !== 'run_shell');
     }
 
     private _bindCommandsTab(): void {
@@ -904,19 +919,38 @@ export class Settings {
         });
 
         document.getElementById('cmd-form-save')?.addEventListener('click', async () => {
-            const title = (document.getElementById('cmd-field-title') as HTMLInputElement)?.value.trim();
-            const keyword = (document.getElementById('cmd-field-keyword') as HTMLInputElement)?.value.trim();
-            const description = (document.getElementById('cmd-field-description') as HTMLInputElement)?.value.trim();
-            const template = (document.getElementById('cmd-field-template') as HTMLInputElement)?.value.trim();
-            const actionType = (document.getElementById('cmd-field-actionType') as HTMLSelectElement)?.value;
-            const requiresArgument = !!((document.getElementById('cmd-field-requiresArgument') as HTMLElement & { checked?: boolean })?.checked);
-            const pinnedEl = document.getElementById('cmd-field-pinned') as HTMLElement & { checked?: boolean };
-            const pinned = !!(pinnedEl?.checked);
+            const title = (
+                document.getElementById('cmd-field-title') as HTMLInputElement
+            )?.value.trim();
+            const keyword = (
+                document.getElementById('cmd-field-keyword') as HTMLInputElement
+            )?.value.trim();
+            const description = (
+                document.getElementById('cmd-field-description') as HTMLInputElement
+            )?.value.trim();
+            const template = (
+                document.getElementById('cmd-field-template') as HTMLInputElement
+            )?.value.trim();
+            const actionType = (
+                document.getElementById('cmd-field-actionType') as HTMLSelectElement
+            )?.value;
+            const requiresArgument = !!(
+                document.getElementById('cmd-field-requiresArgument') as HTMLElement & {
+                    checked?: boolean;
+                }
+            )?.checked;
+            const pinnedEl = document.getElementById('cmd-field-pinned') as HTMLElement & {
+                checked?: boolean;
+            };
+            const pinned = !!pinnedEl?.checked;
 
             const errEl = document.getElementById('cmd-validation-error');
 
             const showError = (msg: string) => {
-                if (errEl) { errEl.textContent = msg; errEl.classList.remove('hidden'); }
+                if (errEl) {
+                    errEl.textContent = msg;
+                    errEl.classList.remove('hidden');
+                }
             };
 
             if (!title) return showError('Title is required.');
@@ -927,7 +961,9 @@ export class Settings {
                 const isAbsURL = /^https?:\/\//i.test(template);
                 const hasQuery = template.includes('{{query}}');
                 if (!isAbsURL && !hasQuery) {
-                    return showError('For Open URL, template must be an absolute URL (https://…) or contain {{query}}.');
+                    return showError(
+                        'For Open URL, template must be an absolute URL (https://…) or contain {{query}}.'
+                    );
                 }
             }
 
