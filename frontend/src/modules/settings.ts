@@ -835,21 +835,24 @@ export class Settings {
         });
 
         list.querySelectorAll<HTMLElement>('.cmd-del-btn').forEach((btn) => {
-            btn.addEventListener('click', async () => {
+            btn.addEventListener('click', () => {
                 const id = btn.dataset['id'] ?? '';
                 const cmd = cmds.find((c) => c.id === id);
-                const confirmed = await showConfirmModal(
+                showConfirmModal(
                     `Delete "${cmd?.title ?? id}"?`,
-                    'This cannot be undone.'
+                    'This cannot be undone.',
+                    'Delete',
+                    true,
+                    async () => {
+                        try {
+                            await DeleteCommand(id);
+                            await this._loadCommandsTab();
+                            this.deps.showToast('Command deleted', cmd?.title ?? id, 'info');
+                        } catch (e) {
+                            this.deps.showToast('Delete failed', String(e), 'error');
+                        }
+                    }
                 );
-                if (!confirmed) return;
-                try {
-                    await DeleteCommand(id);
-                    await this._loadCommandsTab();
-                    this.deps.showToast('Command deleted', cmd?.title ?? id, 'info');
-                } catch (e) {
-                    this.deps.showToast('Delete failed', String(e), 'error');
-                }
             });
         });
     }
