@@ -370,7 +370,6 @@ func (a *App) ResizeToContent(h int) {
 	runtime.WindowSetSize(a.ctx, w, h)
 }
 
-
 func (a *App) HideWindow() {
 	const gracePeriod = 600 * time.Millisecond
 	if time.Since(time.Unix(0, a.lastShownAt.Load())) < gracePeriod {
