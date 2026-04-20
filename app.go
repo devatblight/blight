@@ -104,18 +104,19 @@ type BlightConfig struct {
 }
 
 type App struct {
-	ctx          context.Context
-	config       BlightConfig
-	scanner      *apps.Scanner
-	usage        *search.UsageTracker
-	clipboard    *commands.ClipboardHistory
-	fileIdx      *files.FileIndex
-	hotkey       *hotkey.HotkeyManager
-	tray         *tray.TrayIcon
-	visible      atomic.Bool
-	lastShownAt  atomic.Int64
-	version      string
-	settingsMode bool
+	ctx            context.Context
+	config         BlightConfig
+	scanner        *apps.Scanner
+	usage          *search.UsageTracker
+	clipboard      *commands.ClipboardHistory
+	fileIdx        *files.FileIndex
+	hotkey         *hotkey.HotkeyManager
+	tray           *tray.TrayIcon
+	visible        atomic.Bool
+	lastShownAt    atomic.Int64
+	settingsOpen   atomic.Bool // prevents spawning multiple settings windows
+	version        string
+	settingsMode   bool
 }
 
 func NewApp(version string) *App {
@@ -307,17 +308,27 @@ func (a *App) Uninstall() string {
 }
 
 func (a *App) OpenSettingsWindow() {
+	if !a.settingsOpen.CompareAndSwap(false, true) {
+		return // already open; don't spawn a second window
+	}
 	log := debug.Get()
 	exe, err := os.Executable()
 	if err != nil {
+		a.settingsOpen.Store(false)
 		log.Error("OpenSettingsWindow: could not get executable path", map[string]interface{}{"error": err.Error()})
 		return
 	}
 	cmd := exec.Command(exe, "--settings")
 	configureSettingsCommand(cmd)
 	if err := cmd.Start(); err != nil {
+		a.settingsOpen.Store(false)
 		log.Error("OpenSettingsWindow: failed to spawn settings window", map[string]interface{}{"error": err.Error()})
+		return
 	}
+	go func() {
+		_ = cmd.Wait()
+		a.settingsOpen.Store(false)
+	}()
 }
 
 // spotlightHeight is the window height when no results are shown (search bar only).

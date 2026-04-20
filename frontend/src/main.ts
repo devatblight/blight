@@ -496,6 +496,7 @@ class Blight {
         });
 
         window.addEventListener('blur', () => {
+            if (this.settings.isOpen) return;
             if (!this.hideWhenDeactivated || this.isHiding) return;
             if (Date.now() - this.lastShownAt < 600) return;
             this.isHiding = true;
@@ -832,9 +833,10 @@ class Blight {
     async executeSelected(): Promise<void> {
         const list = this._displayResults.length > 0 ? this._displayResults : this.results;
         if (list.length === 0) return;
-        const result = list[this.selectedIndex];
+        if (this.selectedIndex >= list.length) return;
+        const result = list[this.selectedIndex]!
 
-        if (result.id === 'calc-result') {
+        if (result.id.startsWith('calc-result:')) {
             await navigator.clipboard.writeText(result.title);
             this.showToast('Copied result', result.title);
             return;
@@ -865,7 +867,8 @@ class Blight {
     async executeSecondaryAction(): Promise<void> {
         const list = this._displayResults.length > 0 ? this._displayResults : this.results;
         if (list.length === 0) return;
-        const result = list[this.selectedIndex];
+        if (this.selectedIndex >= list.length) return;
+        const result = list[this.selectedIndex]!
         const actionId = this.getSecondaryActionId(result.id);
         if (!actionId) return;
         const response = await ExecuteContextAction(result.id, actionId);
@@ -875,7 +878,8 @@ class Blight {
     async openActionPanelForSelected(): Promise<void> {
         const list = this._displayResults.length > 0 ? this._displayResults : this.results;
         if (list.length === 0) return;
-        const result = list[this.selectedIndex];
+        if (this.selectedIndex >= list.length) return;
+        const result = list[this.selectedIndex]!
         const selectedEl = this.resultsContainer.querySelector('.result-item.selected');
         let x: number, y: number;
         if (selectedEl) {
@@ -896,7 +900,7 @@ class Blight {
         if (
             resultId.startsWith('sys-') ||
             resultId.startsWith('web-search:') ||
-            resultId === 'calc-result'
+            resultId.startsWith('calc-result:')
         )
             return null;
         return 'admin';

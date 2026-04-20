@@ -274,6 +274,9 @@ func (a *App) ImportSettings(data string) error {
 // at least one recorded use. Used by the frontend to show frequency indicators.
 func (a *App) GetUsageScores() map[string]int {
 	scores := make(map[string]int)
+	if a.scanner == nil || a.usage == nil {
+		return scores
+	}
 	for _, app := range a.scanner.Apps() {
 		if s := a.usage.Score(app.Name); s > 0 {
 			scores[app.Name] = s

@@ -160,7 +160,7 @@ func (a *App) Search(query string) []SearchResult {
 		calc := commands.Evaluate(query)
 		if calc.Valid {
 			scored = append(scored, search.Scored[SearchResult]{
-				Item:  SearchResult{ID: "calc-result", Title: calc.Result, Subtitle: calc.Expression + " — press Enter to copy", Category: "Calculator"},
+				Item:  SearchResult{ID: "calc-result:" + calc.Result, Title: calc.Result, Subtitle: calc.Expression + " — press Enter to copy", Category: "Calculator"},
 				Score: 9000,
 				Cat:   "Calculator",
 			})
