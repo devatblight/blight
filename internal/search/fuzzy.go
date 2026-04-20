@@ -1,6 +1,7 @@
 package search
 
 import (
+	"sort"
 	"strings"
 	"unicode"
 )
@@ -205,12 +206,7 @@ func isWordBoundary(r rune) bool {
 }
 
 func sortByScore(matches []Match) {
-	// Insertion sort — fast enough for typical result sets (< 1000)
-	for i := 1; i < len(matches); i++ {
-		current := i
-		for current > 0 && matches[current].Score > matches[current-1].Score {
-			matches[current], matches[current-1] = matches[current-1], matches[current]
-			current--
-		}
-	}
+	sort.Slice(matches, func(i, j int) bool {
+		return matches[i].Score > matches[j].Score
+	})
 }

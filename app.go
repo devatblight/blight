@@ -114,6 +114,7 @@ type App struct {
 	tray         *tray.TrayIcon
 	visible      atomic.Bool
 	lastShownAt  atomic.Int64
+	settingsOpen atomic.Bool // prevents spawning multiple settings windows
 	version      string
 	settingsMode bool
 }
@@ -142,7 +143,11 @@ func (a *App) startup(ctx context.Context) {
 	log.Debug("config loaded", map[string]interface{}{"firstRun": a.config.FirstRun, "hotkey": a.config.Hotkey})
 
 	a.scanner = apps.NewScanner()
-	log.Info("app scanner initialized", map[string]interface{}{"appCount": len(a.scanner.Apps())})
+	go func() {
+		a.scanner.Scan()
+		log.Info("app scanner ready", map[string]interface{}{"appCount": len(a.scanner.Apps())})
+		runtime.EventsEmit(a.ctx, "appsReady")
+	}()
 
 	a.usage = search.NewUsageTracker()
 	a.clipboard = commands.NewClipboardHistory(ctx)
@@ -303,17 +308,27 @@ func (a *App) Uninstall() string {
 }
 
 func (a *App) OpenSettingsWindow() {
+	if !a.settingsOpen.CompareAndSwap(false, true) {
+		return // already open; don't spawn a second window
+	}
 	log := debug.Get()
 	exe, err := os.Executable()
 	if err != nil {
+		a.settingsOpen.Store(false)
 		log.Error("OpenSettingsWindow: could not get executable path", map[string]interface{}{"error": err.Error()})
 		return
 	}
 	cmd := exec.Command(exe, "--settings")
 	configureSettingsCommand(cmd)
 	if err := cmd.Start(); err != nil {
+		a.settingsOpen.Store(false)
 		log.Error("OpenSettingsWindow: failed to spawn settings window", map[string]interface{}{"error": err.Error()})
+		return
 	}
+	go func() {
+		_ = cmd.Wait()
+		a.settingsOpen.Store(false)
+	}()
 }
 
 // spotlightHeight is the window height when no results are shown (search bar only).

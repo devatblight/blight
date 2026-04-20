@@ -102,8 +102,8 @@ func (a *App) Execute(id string) string {
 		return "copied"
 	}
 
-	if id == "calc-result" {
-		runtime.ClipboardSetText(a.ctx, "")
+	if strings.HasPrefix(id, "calc-result:") {
+		runtime.ClipboardSetText(a.ctx, strings.TrimPrefix(id, "calc-result:"))
 		return "copied"
 	}
 
@@ -150,15 +150,18 @@ func (a *App) Execute(id string) string {
 		return "ok"
 	}
 
-	allApps := a.scanner.Apps()
-	for _, app := range allApps {
-		if app.Name == id {
-			a.usage.Record(id)
-			if err := apps.Launch(app); err != nil {
-				return err.Error()
+	if a.scanner != nil {
+		for _, app := range a.scanner.Apps() {
+			if app.Name == id {
+				a.usage.Record(id)
+				err := apps.Launch(app)
+				if err != nil {
+					return err.Error()
+				}
+				runtime.WindowHide(a.ctx)
+				a.visible.Store(false)
+				return "ok"
 			}
-			runtime.WindowHide(a.ctx)
-			return "ok"
 		}
 	}
 	return "not found"
@@ -201,7 +204,7 @@ func (a *App) GetContextActions(id string) []ContextAction {
 			{ID: "copy", Label: "Copy Expansion", Icon: icon("\uE8C8", "📋"), Shortcut: "⌃↵"},
 			{ID: "delete-alias", Label: "Delete Alias", Icon: icon("\uE74D", "🗑️"), Destructive: true},
 		}
-	case id == "calc-result" || id == "no-results" || strings.HasPrefix(id, "web-search:"):
+	case strings.HasPrefix(id, "calc-result:") || id == "no-results" || strings.HasPrefix(id, "web-search:"):
 		return []ContextAction{}
 	default:
 		pinLabel := "Pin to Top"

@@ -22,9 +22,7 @@ type Scanner struct {
 }
 
 func NewScanner() *Scanner {
-	s := &Scanner{}
-	s.Scan()
-	return s
+	return &Scanner{}
 }
 
 func (s *Scanner) Scan() {
@@ -58,6 +56,19 @@ func (s *Scanner) Names() []string {
 		names[i] = app.Name
 	}
 	return names
+}
+
+func (s *Scanner) Snapshot() ([]AppEntry, []string) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	apps := make([]AppEntry, len(s.apps))
+	names := make([]string, len(s.apps))
+	for i, app := range s.apps {
+		apps[i] = app
+		names[i] = app.Name
+	}
+	return apps, names
 }
 
 func (s *Scanner) startMenuDirs() []string {

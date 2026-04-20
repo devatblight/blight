@@ -496,6 +496,7 @@ class Blight {
         });
 
         window.addEventListener('blur', () => {
+            if (this.settings.isOpen) return;
             if (!this.hideWhenDeactivated || this.isHiding) return;
             if (Date.now() - this.lastShownAt < 600) return;
             this.isHiding = true;
@@ -503,6 +504,12 @@ class Blight {
         });
 
         EventsOn('openSettings', () => this.settings.open());
+
+        // Backend emits this when the app scanner finishes its initial scan.
+        // We re-load the home view so pinned / recent apps appear without delay.
+        EventsOn('appsReady', () => {
+            if (!this.visibleQuery()) this.loadDefaultResults();
+        });
     }
 
     private visibleQuery(): string {
@@ -545,7 +552,10 @@ class Blight {
         }
         this.debounceTimer = setTimeout(async () => {
             const seq = ++this.searchSeq;
+            // Safety valve: clear the spinner if the backend RPC hangs.
+            const safetyOff = setTimeout(() => this.setLoading(false), 5000);
             const results = await Search(query);
+            clearTimeout(safetyOff);
             this.setLoading(false);
             if (seq !== this.searchSeq) return;
             this.currentQuery = query;
@@ -757,9 +767,14 @@ class Blight {
                 .then((icon) => {
                     if (!icon || this.renderSeq !== renderSeq) return;
                     this.iconCache.set(result.path, icon);
-                    const el = this.resultsContainer.querySelector(`[data-icon-index="${index}"]`);
-                    if (el)
-                        el.outerHTML = `<div class="result-icon"><img src="${icon}" alt=""/></div>`;
+                    const el = this.resultsContainer.querySelector(
+                        `[data-icon-index="${index}"]`
+                    ) as HTMLElement | null;
+                    if (el) {
+                        el.className = 'result-icon';
+                        el.removeAttribute('data-icon-index');
+                        el.innerHTML = `<img src="${icon}" alt=""/>`;
+                    }
                 })
                 .catch(() => {});
         });
@@ -818,9 +833,10 @@ class Blight {
     async executeSelected(): Promise<void> {
         const list = this._displayResults.length > 0 ? this._displayResults : this.results;
         if (list.length === 0) return;
-        const result = list[this.selectedIndex];
+        if (this.selectedIndex >= list.length) return;
+        const result = list[this.selectedIndex]!;
 
-        if (result.id === 'calc-result') {
+        if (result.id.startsWith('calc-result:')) {
             await navigator.clipboard.writeText(result.title);
             this.showToast('Copied result', result.title);
             return;
@@ -851,7 +867,8 @@ class Blight {
     async executeSecondaryAction(): Promise<void> {
         const list = this._displayResults.length > 0 ? this._displayResults : this.results;
         if (list.length === 0) return;
-        const result = list[this.selectedIndex];
+        if (this.selectedIndex >= list.length) return;
+        const result = list[this.selectedIndex]!;
         const actionId = this.getSecondaryActionId(result.id);
         if (!actionId) return;
         const response = await ExecuteContextAction(result.id, actionId);
@@ -861,7 +878,8 @@ class Blight {
     async openActionPanelForSelected(): Promise<void> {
         const list = this._displayResults.length > 0 ? this._displayResults : this.results;
         if (list.length === 0) return;
-        const result = list[this.selectedIndex];
+        if (this.selectedIndex >= list.length) return;
+        const result = list[this.selectedIndex]!;
         const selectedEl = this.resultsContainer.querySelector('.result-item.selected');
         let x: number, y: number;
         if (selectedEl) {
@@ -882,7 +900,7 @@ class Blight {
         if (
             resultId.startsWith('sys-') ||
             resultId.startsWith('web-search:') ||
-            resultId === 'calc-result'
+            resultId.startsWith('calc-result:')
         )
             return null;
         return 'admin';
