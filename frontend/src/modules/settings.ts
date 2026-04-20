@@ -22,6 +22,7 @@ import {
     GetCommands,
     SaveCommand,
     DeleteCommand,
+    ResizeToContent,
 } from '../../wailsjs/go/main/App';
 import { marked, Renderer } from 'marked';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
@@ -69,6 +70,12 @@ export class Settings {
         this.panelEl.style.animation = 'none';
         void this.panelEl.offsetHeight; // force reflow
         this.panelEl.style.animation = '';
+
+        // Expand the OS window so the full settings panel is visible.
+        // In standalone settings-window mode the OS window is already sized correctly.
+        if (!this.deps.settingsMode) {
+            void ResizeToContent(560);
+        }
 
         this.activateTab('general');
 

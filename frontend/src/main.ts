@@ -126,7 +126,12 @@ class Blight {
         this.settings = new Settings(this.settingsPanelEl, {
             showToast: (msg, detail?, type?) => this.showToast(msg, detail, type),
             applyRuntimeSettings: (cfg) => this._applyRuntimeSettings(cfg),
-            onClose: () => this.focusSearchInput(),
+            onClose: () => {
+                this.focusSearchInput();
+                // Restore the window to the launcher's natural height now that
+                // the settings overlay is gone.
+                this.syncWindowHeight();
+            },
             settingsMode: false, // updated after init
             getLastUpdateCheck: () => this.lastUpdateCheck,
             setLastUpdateCheck: (t) => {
@@ -580,12 +585,26 @@ class Blight {
         document.getElementById('search-loader')?.classList.toggle('visible', loading);
     }
 
-    /** Resize the OS window to match the launcher's natural content height. */
+    /** Resize the OS window to match the launcher's natural content height.
+     *  getBoundingClientRect forces a synchronous layout, so no rAF needed. */
     syncWindowHeight(): void {
-        requestAnimationFrame(() => {
-            const h = Math.ceil(this.launcherEl.getBoundingClientRect().height);
-            if (h > 0 && typeof ResizeToContent === 'function') void ResizeToContent(h);
-        });
+        const h = Math.ceil(this.launcherEl.getBoundingClientRect().height);
+        if (h > 0 && typeof ResizeToContent === 'function') void ResizeToContent(h);
+    }
+
+    /**
+     * Estimate the window height needed for a result list without touching the DOM.
+     * Used to pre-grow the window before innerHTML is set so content never renders
+     * into a too-small window (the cutoff artefact).
+     * Heights derived from CSS: search-container=56px, divider=1px, footer=35px,
+     * result-item=44px, result-category=28px, results padding=12px, max-height=432px.
+     */
+    private estimateWindowHeight(results: main.SearchResult[]): number {
+        if (results.length === 0) return 72; // backend minimum (spotlightHeight)
+        const categories = new Set(results.map((r) => r.category)).size;
+        const contentH = categories * 28 + results.length * 44 + 12;
+        const containerH = Math.min(contentH, 432);
+        return 56 + 1 + containerH + 35; // search + divider + results + footer
     }
 
     // --- Results rendering ---
@@ -643,6 +662,13 @@ class Blight {
         }
 
         const displayResults = filtered.length > 0 ? filtered : this.results;
+
+        // Pre-grow the OS window before touching the DOM so results never render
+        // into a too-small frame.  syncWindowHeight() after innerHTML corrects any
+        // over/under-estimate precisely.
+        if (typeof ResizeToContent === 'function') {
+            void ResizeToContent(this.estimateWindowHeight(displayResults));
+        }
 
         // Clamp selectedIndex so it never points past the end of the visible list.
         if (this.selectedIndex >= displayResults.length) {
