@@ -25,9 +25,7 @@ type Scanner struct {
 }
 
 func NewScanner() *Scanner {
-	s := &Scanner{}
-	s.Scan()
-	return s
+	return &Scanner{}
 }
 
 func (s *Scanner) Scan() {

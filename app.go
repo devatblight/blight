@@ -142,7 +142,11 @@ func (a *App) startup(ctx context.Context) {
 	log.Debug("config loaded", map[string]interface{}{"firstRun": a.config.FirstRun, "hotkey": a.config.Hotkey})
 
 	a.scanner = apps.NewScanner()
-	log.Info("app scanner initialized", map[string]interface{}{"appCount": len(a.scanner.Apps())})
+	go func() {
+		a.scanner.Scan()
+		log.Info("app scanner ready", map[string]interface{}{"appCount": len(a.scanner.Apps())})
+		runtime.EventsEmit(a.ctx, "appsReady")
+	}()
 
 	a.usage = search.NewUsageTracker()
 	a.clipboard = commands.NewClipboardHistory(ctx)

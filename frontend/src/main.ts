@@ -503,6 +503,12 @@ class Blight {
         });
 
         EventsOn('openSettings', () => this.settings.open());
+
+        // Backend emits this when the app scanner finishes its initial scan.
+        // We re-load the home view so pinned / recent apps appear without delay.
+        EventsOn('appsReady', () => {
+            if (!this.currentQuery) this.loadDefaultResults();
+        });
     }
 
     private visibleQuery(): string {
@@ -545,7 +551,10 @@ class Blight {
         }
         this.debounceTimer = setTimeout(async () => {
             const seq = ++this.searchSeq;
+            // Safety valve: clear the spinner if the backend RPC hangs.
+            const safetyOff = setTimeout(() => this.setLoading(false), 5000);
             const results = await Search(query);
+            clearTimeout(safetyOff);
             this.setLoading(false);
             if (seq !== this.searchSeq) return;
             this.currentQuery = query;
@@ -757,9 +766,14 @@ class Blight {
                 .then((icon) => {
                     if (!icon || this.renderSeq !== renderSeq) return;
                     this.iconCache.set(result.path, icon);
-                    const el = this.resultsContainer.querySelector(`[data-icon-index="${index}"]`);
-                    if (el)
-                        el.outerHTML = `<div class="result-icon"><img src="${icon}" alt=""/></div>`;
+                    const el = this.resultsContainer.querySelector(
+                        `[data-icon-index="${index}"]`
+                    ) as HTMLElement | null;
+                    if (el) {
+                        el.className = 'result-icon';
+                        el.removeAttribute('data-icon-index');
+                        el.innerHTML = `<img src="${icon}" alt=""/>`;
+                    }
                 })
                 .catch(() => {});
         });

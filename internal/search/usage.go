@@ -110,5 +110,10 @@ func (t *UsageTracker) save() {
 		return
 	}
 	os.MkdirAll(filepath.Dir(t.path), 0755)
-	os.WriteFile(t.path, data, 0644)
+	// Write to a temp file then rename so a mid-write crash never corrupts usage.json.
+	tmp := t.path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0644); err != nil {
+		return
+	}
+	os.Rename(tmp, t.path)
 }

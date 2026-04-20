@@ -190,6 +190,8 @@ body {
     max-height: 432px; /* ~8 rows × 54px; scroll beyond */
 }
 
+.results-container.keyboard-nav { scroll-behavior: auto; }
+
 .results-container::-webkit-scrollbar { width: 3px; }
 .results-container::-webkit-scrollbar-track { background: transparent; }
 .results-container::-webkit-scrollbar-thumb {
